@@ -1,0 +1,38 @@
+D:\Project\Shopping web\bin\Debug\net10.0\appsettings.Development.json
+D:\Project\Shopping web\bin\Debug\net10.0\appsettings.json
+D:\Project\Shopping web\bin\Debug\net10.0\Shopping web.staticwebassets.endpoints.json
+D:\Project\Shopping web\bin\Debug\net10.0\Shopping web.exe
+D:\Project\Shopping web\bin\Debug\net10.0\Shopping web.deps.json
+D:\Project\Shopping web\bin\Debug\net10.0\Shopping web.runtimeconfig.json
+D:\Project\Shopping web\bin\Debug\net10.0\Shopping web.dll
+D:\Project\Shopping web\bin\Debug\net10.0\Shopping web.pdb
+D:\Project\Shopping web\bin\Debug\net10.0\Microsoft.AspNetCore.OpenApi.dll
+D:\Project\Shopping web\bin\Debug\net10.0\Microsoft.OpenApi.dll
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.csproj.AssemblyReference.cache
+D:\Project\Shopping web\obj\Debug\net10.0\rpswa.dswa.cache.json
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.GeneratedMSBuildEditorConfig.editorconfig
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.AssemblyInfoInputs.cache
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.AssemblyInfo.cs
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.csproj.CoreCompileInputs.cache
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.MvcApplicationPartsAssemblyInfo.cs
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.MvcApplicationPartsAssemblyInfo.cache
+D:\Project\Shopping web\obj\Debug\net10.0\rjimswa.dswa.cache.json
+D:\Project\Shopping web\obj\Debug\net10.0\rjsmrazor.dswa.cache.json
+D:\Project\Shopping web\obj\Debug\net10.0\rjsmcshtml.dswa.cache.json
+D:\Project\Shopping web\obj\Debug\net10.0\scopedcss\bundle\Shopping web.styles.css
+D:\Project\Shopping web\obj\Debug\net10.0\staticwebassets.build.json
+D:\Project\Shopping web\obj\Debug\net10.0\staticwebassets.build.json.cache
+D:\Project\Shopping web\obj\Debug\net10.0\staticwebassets.development.json
+D:\Project\Shopping web\obj\Debug\net10.0\staticwebassets.build.endpoints.json
+D:\Project\Shopping web\obj\Debug\net10.0\swae.build.ex.cache
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping.DB401DFC.Up2Date
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.dll
+D:\Project\Shopping web\obj\Debug\net10.0\refint\Shopping web.dll
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.pdb
+D:\Project\Shopping web\obj\Debug\net10.0\Shopping web.genruntimeconfig.cache
+D:\Project\Shopping web\obj\Debug\net10.0\ref\Shopping web.dll
+D:\Project\Shopping web\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll
+D:\Project\Shopping web\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
+D:\Project\Shopping web\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+D:\Project\Shopping web\bin\Debug\net10.0\Microsoft.EntityFrameworkCore.dll
+D:\Project\Shopping web\bin\Debug\net10.0\Microsoft.EntityFrameworkCore.Abstractions.dll

@@ -1,0 +1,6 @@
+@Shopping_web_HostAddress = http://localhost:5133
+
+GET {{Shopping_web_HostAddress}}/WeatherForecast
+Accept: application/text/xml
+
+###
