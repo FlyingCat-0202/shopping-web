@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\Project\\Shopping web\\Shopping web.csproj": {}
+    "D:\\shopping\\ShoppingWeb\\Shopping web.csproj": {}
   },
   "projects": {
-    "D:\\Project\\Shopping web\\Shopping web.csproj": {
+    "D:\\shopping\\ShoppingWeb\\Shopping web.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\Project\\Shopping web\\Shopping web.csproj",
+        "projectUniqueName": "D:\\shopping\\ShoppingWeb\\Shopping web.csproj",
         "projectName": "Shopping web",
-        "projectPath": "D:\\Project\\Shopping web\\Shopping web.csproj",
+        "projectPath": "D:\\shopping\\ShoppingWeb\\Shopping web.csproj",
         "packagesPath": "C:\\Users\\thien\\.nuget\\packages\\",
-        "outputPath": "D:\\Project\\Shopping web\\obj\\",
+        "outputPath": "D:\\shopping\\ShoppingWeb\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\thien\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -50,7 +50,27 @@
             },
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
-              "version": "[10.0.5, )"
+              "version": "[10.0.7, )"
+            },
+            "Microsoft.EntityFrameworkCore.Design": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[10.0.7, )"
+            },
+            "Microsoft.EntityFrameworkCore.Tools": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[10.0.7, )"
+            },
+            "Microsoft.Extensions.Configuration.Json": {
+              "target": "Package",
+              "version": "[10.0.7, )"
+            },
+            "Npgsql.EntityFrameworkCore.PostgreSQL": {
+              "target": "Package",
+              "version": "[10.0.1, )"
             },
             "Swashbuckle.AspNetCore": {
               "target": "Package",
