@@ -1,4 +1,5 @@
-﻿// Modules/Product/Category.cs
+﻿// Modules/ProductService/Models/Category.cs
+namespace Shopping_web.Modules.ProductService.Models;
 public class Category
 {
     public int Id { get; set; } 

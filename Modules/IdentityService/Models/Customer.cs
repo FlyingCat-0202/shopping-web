@@ -1,4 +1,5 @@
 ﻿// Modules/Identity/Customer.cs
+namespace Shopping_web.Modules.IdentityService.Models;
 public class Customer
 {
     public Guid Id { get; set; } = Guid.NewGuid();
