@@ -70,7 +70,5 @@ public class AppDbContext : DbContext
                   .HasForeignKey(od => od.OrderId);
         });
 
-        // Ghi chú: Dòng cuối cùng trong mã của bạn `Ref: "Products"."Name" < "Products"."Id"` 
-        // là một cú pháp không hợp lệ/lỗi logic nên mình bỏ qua nhé.
     }
 }
