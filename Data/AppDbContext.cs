@@ -26,6 +26,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasIndex(c => c.Email).IsUnique(); // Email Unique
             entity.HasIndex(c => c.PhoneNumber).IsUnique(); // Phone Unique
+
+            entity.HasMany(c => c.CartItems)
+                .WithOne(ci => ci.Customer)
+                .HasForeignKey(ci => ci.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(c => c.Orders)
+                .WithOne(o => o.Customer)
+                .HasForeignKey(o => o.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // ==========================================
@@ -39,6 +49,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(p => p.Category)
                   .WithMany(c => c.Products)
                   .HasForeignKey(p => p.CategoryId);
+
+            entity.HasMany(p => p.CartItems)
+                .WithOne(ci => ci.Product)
+                .HasForeignKey(ci => ci.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(p => p.OrderDetails)
+                .WithOne(od => od.Product)
+                .HasForeignKey(od => od.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // ==========================================
@@ -66,6 +86,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(od => od.Order)
                   .WithMany(o => o.OrderDetails)
                   .HasForeignKey(od => od.OrderId);
+
+            entity.HasOne(od => od.Product)
+                  .WithMany(p => p.OrderDetails)
+                  .HasForeignKey(od => od.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
