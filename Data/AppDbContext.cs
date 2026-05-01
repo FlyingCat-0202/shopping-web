@@ -1,5 +1,8 @@
 ﻿// Data/AppDbContext.cs
 using Microsoft.EntityFrameworkCore;
+using Shopping_web.Modules.OrderService.Models;
+using Shopping_web.Modules.ProductService.Models;
+using Shopping_web.Modules.IdentityService.Models;
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options) 
 {
     // --- IDENTITY ---

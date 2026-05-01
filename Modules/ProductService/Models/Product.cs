@@ -1,4 +1,5 @@
-﻿// Modules/Product/Product.cs
+﻿// Modules/ProductService/Models/Product.cs
+namespace Shopping_web.Modules.ProductService.Models;
 public class Product
 {
     public Guid Id { get; set; } = Guid.NewGuid();
