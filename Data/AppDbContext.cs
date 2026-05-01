@@ -1,17 +1,12 @@
 ﻿// Data/AppDbContext.cs
 using Microsoft.EntityFrameworkCore;
-
-public class AppDbContext : DbContext
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options) 
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
-
     // --- IDENTITY ---
     public DbSet<Customer> Customers { get; set; }
-
     // --- PRODUCT ---
     public DbSet<Category> Categories { get; set; }
     public DbSet<Product> Products { get; set; }
-
     // --- ORDER ---
     public DbSet<CartItem> CartItems { get; set; }
     public DbSet<Order> Orders { get; set; }
@@ -69,6 +64,5 @@ public class AppDbContext : DbContext
                   .WithMany(o => o.OrderDetails)
                   .HasForeignKey(od => od.OrderId);
         });
-
     }
 }
