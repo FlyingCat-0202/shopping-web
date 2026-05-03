@@ -22,7 +22,7 @@ public static class AuthEndpoints
             UserManager<Customer> userManager,
             RoleManager<IdentityRole<Guid>> roleManager,
             IConfiguration configuration) =>
-        {
+            {
 	        var email = NormalizeEmail(request.Email);
 
             if (await userManager.FindByEmailAsync(email) is not null)

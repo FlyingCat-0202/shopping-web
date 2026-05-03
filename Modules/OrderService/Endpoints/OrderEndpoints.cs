@@ -20,7 +20,7 @@ public static class OrderEndpoints
         {
             // Lấy ID của user từ thẻ JWT (Không tin tưởng ID do Frontend gửi lên)
             var userIdString = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(userIdString, out Guid customerId)) 
+            if (!Guid.TryParse(userIdString, out Guid customerId))
                 return Results.Unauthorized();
 
             // Khởi tạo Order (Mã Guid.NewGuid() sẽ tự động chạy theo Model của bạn)
