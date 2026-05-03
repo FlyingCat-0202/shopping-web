@@ -5,6 +5,7 @@ using Shopping_web.Modules.ProductService.Endpoints;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddIdentityAuthentication(builder.Configuration);
+builder.Services.AddServiceDbContexts(builder.Configuration);
 
 var app = builder.Build();
 

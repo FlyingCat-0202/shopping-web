@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Shopping_web.Data;
 using Shopping_web.Modules.IdentityService.Models;
 
 namespace Shopping_web.Extensions;
@@ -11,9 +12,11 @@ public static class IdentityServiceExtensions
 {
 	public static IServiceCollection AddIdentityAuthentication(this IServiceCollection services, IConfiguration configuration)
 	{
-		services.AddDbContext<AppDbContext>(options =>
+		services.AddDbContext<IdentityAppDbContext>(options =>
 		{
-			options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+			options.UseNpgsql(
+				configuration.GetConnectionString("DefaultConnection"),
+				npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Identity", "identity"));
 		});
 
 		services.AddIdentity<Customer, IdentityRole<Guid>>(options =>
@@ -24,7 +27,7 @@ public static class IdentityServiceExtensions
 			options.Password.RequireUppercase = true;
 			options.Password.RequireNonAlphanumeric = false;
 		})
-		.AddEntityFrameworkStores<AppDbContext>()
+		.AddEntityFrameworkStores<IdentityAppDbContext>()
 		.AddDefaultTokenProviders();
 
 		services.AddAuthentication(options =>
@@ -54,4 +57,5 @@ public static class IdentityServiceExtensions
 
 		return services;
 	}
+
 }
