@@ -24,18 +24,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         modelBuilder.Entity<Customer>(entity =>
         {
             entity.ToTable("Customers"); // Đổi tên bảng mặc định từ AspNetUsers thành Customers
-            entity.HasIndex(c => c.Email).IsUnique(); // Email Unique
-            entity.HasIndex(c => c.PhoneNumber).IsUnique(); // Phone Unique
-
-            entity.HasMany(c => c.CartItems) // One-to-Many relationship between Customer and CartItem
-                .WithOne(ci => ci.Customer) // Each CartItem has one Customer
-                .HasForeignKey(ci => ci.CustomerId) // Foreign key in CartItem pointing to Customer
-                .OnDelete(DeleteBehavior.Cascade); // When a Customer is deleted, their CartItems are also deleted
-
-            entity.HasMany(c => c.Orders) // One-to-Many relationship between Customer and Order
-                .WithOne(o => o.Customer) // Each Order has one Customer
-                .HasForeignKey(o => o.CustomerId) // Foreign key in Order pointing to Customer
-                .OnDelete(DeleteBehavior.Restrict); // When a Customer is deleted, their Orders are not deleted to preserve order history
+            entity.HasIndex(c => c.Email)
+                  .IsUnique(); // Email Unique
+            entity.HasIndex(c => c.PhoneNumber)
+                  .IsUnique(); // Phone Unique
         });
 
         // ==========================================
@@ -43,21 +35,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         // ==========================================
         modelBuilder.Entity<Product>(entity =>
         {
-            entity.Property(p => p.Price).HasColumnType("decimal(18,2)"); // Định dạng kiểu dữ liệu cho cột Price
+            entity.HasKey(p => p.Id);
 
-            entity.HasOne(p => p.Category) // Each Product has one Category
-                  .WithMany(c => c.Products) // Each Category has many Products
-                  .HasForeignKey(p => p.CategoryId); // Foreign key in Product pointing to Category
+            entity.Property(p => p.Price)
+                  .HasColumnType("decimal(18,2)"); // Định dạng kiểu dữ liệu cho cột Price
 
-            entity.HasMany(p => p.CartItems) // One-to-Many relationship between Product and CartItem
-                .WithOne(ci => ci.Product) // Each CartItem has one Product
-                .HasForeignKey(ci => ci.ProductId) // Foreign key in CartItem pointing to Product
-                .OnDelete(DeleteBehavior.Cascade); // When a Product is deleted, related CartItems are also deleted
+            entity.HasOne(c => c.Category)
+                  .WithMany()
+                  .HasForeignKey(c => c.CategoryId)
+                  .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasMany(p => p.OrderDetails) // One-to-Many relationship between Product and OrderDetail
-                .WithOne(od => od.Product) // Each OrderDetail has one Product
-                .HasForeignKey(od => od.ProductId) // Foreign key in OrderDetail pointing to Product
-                .OnDelete(DeleteBehavior.Restrict); // When a Product is deleted, related OrderDetails are not deleted to preserve order history
+            entity.HasIndex(p => p.CategoryId)
+                  .HasDatabaseName("IX_Products_CategoryId");
+        });
+
+        modelBuilder.Entity<Category>(entity =>
+        {
+            entity.HasKey(c => c.Id);
         });
 
         // ==========================================
@@ -70,24 +64,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
 
         modelBuilder.Entity<Order>(entity =>
         {
-            entity.Property(o => o.TotalAmount).HasColumnType("decimal(18,2)"); // Định dạng kiểu dữ liệu cho cột TotalAmount
+
+            entity.Property(o => o.TotalAmount)
+                  .HasColumnType("decimal(18,2)"); // Định dạng kiểu dữ liệu cho cột TotalAmount
+
+            entity.HasIndex(o => o.CustomerId)
+                  .HasDatabaseName("IX_Orders_CustomerId");
         });
 
         modelBuilder.Entity<OrderDetail>(entity =>
         {
             entity.HasKey(od => new { od.OrderId, od.ProductId }); // Thiết lập Composite Primary Key
 
-            entity.Property(od => od.UnitPrice).HasColumnType("decimal(18,2)"); // Định dạng kiểu dữ liệu cho cột UnitPrice
+            entity.Property(od => od.UnitPrice)
+                  .HasColumnType("decimal(18,2)"); // Định dạng kiểu dữ liệu cho cột UnitPrice
 
             // Khóa ngoại nội bộ
             entity.HasOne(od => od.Order) // Each OrderDetail has one Order
-                  .WithMany(o => o.OrderDetails) // Each Order has many OrderDetails
-                  .HasForeignKey(od => od.OrderId); // Foreign key in OrderDetail pointing to Order
-
-            entity.HasOne(od => od.Product) // Each OrderDetail has one Product
-                  .WithMany(p => p.OrderDetails) // Each Product has many OrderDetails
-                  .HasForeignKey(od => od.ProductId) // Foreign key in OrderDetail pointing to Product
-                  .OnDelete(DeleteBehavior.Restrict); // When a Product is deleted, related OrderDetails are not deleted to preserve order history
+                  .WithMany() // Each Order has many OrderDetails
+                  .HasForeignKey(od => od.OrderId) // Foreign key in OrderDetail pointing to Order
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

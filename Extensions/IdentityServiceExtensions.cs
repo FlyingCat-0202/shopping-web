@@ -15,6 +15,7 @@ public static class IdentityServiceExtensions
 		{
 			options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
 		});
+
 		services.AddIdentity<Customer, IdentityRole<Guid>>(options =>
 		{
 			options.Password.RequiredLength = 8;
