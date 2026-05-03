@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Shopping_web.Data;
 using Shopping_web.Modules.ProductService.DTOs;
 using Shopping_web.Modules.ProductService.Models;
 
@@ -11,7 +12,7 @@ public static class ProductEndpoints
         // TEST THOI NHE !
         var group = app.MapGroup("/api/products").WithTags("Products");
 
-        group.MapGet("/", async (AppDbContext db) =>
+        group.MapGet("/", async (ProductDbContext db) =>
         {
             var products = await db.Products
                 .Include(p => p.Category)
@@ -25,7 +26,7 @@ public static class ProductEndpoints
             return Results.Ok(products);
         });
 
-        group.MapGet("/{id:guid}", async (Guid id, AppDbContext db) =>
+        group.MapGet("/{id:guid}", async (Guid id, ProductDbContext db) =>
         {
             return await db.Products
                 .Include(p => p.Category)
@@ -36,7 +37,7 @@ public static class ProductEndpoints
                     : Results.NotFound();
         });
 
-        group.MapPost("/", async (CreateProductRequest request, AppDbContext db) =>
+        group.MapPost("/", async (CreateProductRequest request, ProductDbContext db) =>
         {
             var product = new Product
             {
