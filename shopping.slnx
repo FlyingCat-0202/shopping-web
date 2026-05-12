@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="AppHost" >
+    <Project Path="AppHost\AppHost.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src\BuildingBlocks\EventBus\EventBus.csproj" />
+    <Project Path="src\Order\Order.API\Order.API.csproj" />
+    <Project Path="src\Order\Order.Domain\Order.Domain.csproj" />
+    <Project Path="src\Order\Order.Infrastructure\Order.Infrastructure.csproj" />
+    <Project Path="src\Cart\Cart.API\Cart.API.csproj" />
+    <Project Path="src\Cart\Cart.Domain\Cart.Domain.csproj" />
+    <Project Path="src\Cart\Cart.Infrastructure\Cart.Infrastructure.csproj" />
+  </Folder>
+</Solution>
