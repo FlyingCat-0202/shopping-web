@@ -1,8 +1,10 @@
 using Cart.API.Clients;
-using Cart.API.Consumers;
+using Cart.API.IntegrationEvents.Consumers;
 using Cart.API.Endpoints;
 using Cart.API.Validators;
 using Cart.Infrastructure.Data;
+using Cart.Infrastructure.Idempotency;
+using EventBus.Infrastructure;
 using FluentValidation;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -86,6 +88,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     };
 });
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<IIdempotencyService, CartIdempotencyService>();
 
 builder.Services.AddMassTransit(x =>
 {

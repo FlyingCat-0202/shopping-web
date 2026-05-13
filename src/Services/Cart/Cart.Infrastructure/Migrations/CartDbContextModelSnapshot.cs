@@ -44,6 +44,20 @@ namespace Cart.Infrastructure.Migrations
                             t.HasCheckConstraint("CK_CartItems_Quantity", "\"Quantity\" > 0");
                         });
                 });
+
+            modelBuilder.Entity("Order.Infrastructure.Data.IdempotentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("IdempotentRequests", "cart");
+                });
 #pragma warning restore 612, 618
         }
     }

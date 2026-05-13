@@ -1,9 +1,9 @@
-using Order.Domain.Enums;
-using Order.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.EntityFrameworkCore;
+using Order.Domain.Enums;
+using Order.Infrastructure.Data;
 
 namespace Order.Infrastructure.BackgroundJobs;
 

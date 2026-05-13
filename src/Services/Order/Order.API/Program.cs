@@ -1,13 +1,14 @@
 using EventBus.Contracts;
+using EventBus.Infrastructure;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Order.API.Endpoints;
-using Order.API.Extensions;
 using Order.API.IntegrationEvents.Consumer;
 using Order.Infrastructure.BackgroundJobs;
 using Order.Infrastructure.Data;
+using Order.Infrastructure.Idempotency;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +34,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
 builder.Services.AddHostedService<OrderTimeoutService>();
+builder.Services.AddScoped<IIdempotencyService, OrderIdempotencyService>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();

@@ -26,6 +26,4 @@ public record OrderDetailResponse(Guid Id, DateTime OrderDate, decimal TotalAmou
 
 public record OrderItemResponse(Guid ProductId, int Quantity, decimal UnitPrice);
 public record OrderItemGrouping(Guid ProductId, int Quantity);
-
-/// <summary>Generic pagination wrapper</summary>
 public record PagedResult<T>(List<T> Items, int TotalCount, int PageIndex, int PageSize);

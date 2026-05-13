@@ -22,7 +22,6 @@ public class StockReservedConsumer(OrderDbContext dbContext, ILogger<StockReserv
             var prices = message.Items.ToDictionary(i => i.ProductId, i => i.UnitPrice);
             order.ConfirmWithPrices(prices);
 
-            // Event-based: thay thế ICartModuleApi.RemoveItemsAsync()
             var productIds = order.Items.Select(od => od.ProductId).ToList();
             await context.Publish(new CartItemsRemovedEvent
             {

@@ -1,12 +1,13 @@
-using Order.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using Order.Domain.Entities;
+using OrderEntity = Order.Domain.Entities.Order;
 
 namespace Order.Infrastructure.Data;
 
 public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContext(options)
 {
-    public DbSet<Domain.Entities.Order> Orders { get; set; } = null!;
+    public DbSet<OrderEntity> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
     public DbSet<IdempotentRequest> IdempotentRequests { get; set; } = null!;
 
@@ -14,7 +15,7 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
     {
         modelBuilder.HasDefaultSchema("order");
 
-        modelBuilder.Entity<Domain.Entities.Order>(entity =>
+        modelBuilder.Entity<OrderEntity>(entity =>
         {
             entity.ToTable("Orders", "order");
             entity.Property(o => o.Status).HasConversion<string>();

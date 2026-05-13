@@ -1,9 +1,10 @@
 using System.Security.Claims;
 using Cart.API.Clients;
 using Cart.API.Dtos;
-using Cart.API.Extensions;
+using EventBus.Extensions;
 using Cart.Domain.Entities;
 using Cart.Infrastructure.Data;
+using EventBus.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace Cart.API.Endpoints;
@@ -14,7 +15,8 @@ public static class CartEndpoints
     {
         var group = app.MapGroup("/api/cart")
             .WithTags("Cart")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .AddEndpointFilter<IdempotencyFilter>();
 
         group.MapGet("/", GetCart).WithName("GetCart");
         group.MapPost("/items", AddItem)
