@@ -15,9 +15,11 @@
     <PackageReference Include="Aspire.Hosting.AppHost" Version="13.2.2" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.2.2" />
     <PackageReference Include="Aspire.Hosting.RabbitMQ" Version="13.2.2" />
+    <PackageReference Include="Aspire.Hosting.Redis" Version="13.2.2" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\src\Services\Identity\Identity.API\Identity.API.csproj" />
     <ProjectReference Include="..\src\Services\Order\Order.API\Order.API.csproj" />
     <ProjectReference Include="..\src\Services\Cart\Cart.API\Cart.API.csproj" />
     <ProjectReference Include="..\src\Services\Product\Product.API\Product.API.csproj" />
