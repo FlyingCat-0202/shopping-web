@@ -29,7 +29,6 @@ public class ProductDeleteConsumer(ProductDbContext db, ILogger<ProductDeleteCon
             product.IsActive = false;
             product.StockQuantity = 0;
 
-            await context.Publish(new ProductDeletedEvent(product.Id), context.CancellationToken);
             await db.SaveChangesAsync(context.CancellationToken);
             if (logger.IsEnabled(LogLevel.Information))
             {

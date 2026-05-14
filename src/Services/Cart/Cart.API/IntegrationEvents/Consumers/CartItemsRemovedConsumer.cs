@@ -1,11 +1,10 @@
-using Cart.Infrastructure.Data;
+using Cart.API.CartStore;
 using EventBus.Contracts;
 using MassTransit;
-using Microsoft.EntityFrameworkCore;
 
 namespace Cart.API.IntegrationEvents.Consumers;
 
-public class CartItemsRemovedConsumer(CartDbContext dbContext, ILogger<CartItemsRemovedConsumer> logger)
+public class CartItemsRemovedConsumer(ICartStore cartStore, ILogger<CartItemsRemovedConsumer> logger)
     : IConsumer<CartItemsRemovedEvent>
 {
     public async Task Consume(ConsumeContext<CartItemsRemovedEvent> context)
@@ -14,9 +13,7 @@ public class CartItemsRemovedConsumer(CartDbContext dbContext, ILogger<CartItems
         if (productIds.Count == 0)
             return;
 
-        var removed = await dbContext.CartItems
-            .Where(c => c.CustomerId == context.Message.CustomerId && productIds.Contains(c.ProductId))
-            .ExecuteDeleteAsync(context.CancellationToken);
+        var removed = await cartStore.RemoveItemsAsync(context.Message.CustomerId, productIds);
 
         logger.LogInformation(
             "Đã xóa {Count} cart items của customer {CustomerId} sau khi đơn hàng được xác nhận.",

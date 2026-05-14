@@ -1,10 +1,15 @@
 <Project>
-  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Cart.API' Or '$(MSBuildProjectName)' == 'Order.API' Or '$(MSBuildProjectName)' == 'Product.API'">
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Cart.API' Or '$(MSBuildProjectName)' == 'Order.API' Or '$(MSBuildProjectName)' == 'Product.API' Or '$(MSBuildProjectName)' == 'Identity.API'">
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="MassTransit" Version="8.3.3" />
-    <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.3.3" />
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.3" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.58" Condition="'$(MSBuildProjectName)' == 'Cart.API'" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Order.API' Or '$(MSBuildProjectName)' == 'Product.API' Or '$(MSBuildProjectName)' == 'Identity.API'">
+    <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.3.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -12,10 +17,9 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Cart.Infrastructure' Or '$(MSBuildProjectName)' == 'Order.Infrastructure' Or '$(MSBuildProjectName)' == 'Product.Infrastructure'">
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Order.Infrastructure' Or '$(MSBuildProjectName)' == 'Product.Infrastructure' Or '$(MSBuildProjectName)' == 'Identity.Infrastructure'">
     <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.3.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
@@ -25,5 +29,13 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
+		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.7" />
   </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Identity.Domain'">
+		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.7" />
+		<PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.7" />
+		<PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.7" />
+	</ItemGroup>
 </Project>

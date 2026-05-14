@@ -1,3 +1,4 @@
+using EventBus.Extensions;
 using EventBus.Infrastructure;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -143,6 +144,8 @@ builder.Services.AddMassTransit(x =>
 });
 
 var app = builder.Build();
+
+await app.MigrateDatabaseAsync<ProductDbContext>();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();

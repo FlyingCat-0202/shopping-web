@@ -1,15 +1,29 @@
 <Solution>
-  <Folder Name="/AppHost/" >
+  <Folder Name="/AppHost/">
     <Project Path="AppHost\AppHost.csproj" />
   </Folder>
-  <Folder Name="/src/">
+  <Folder Name="/Solution Items/">
+    <File Path="appsetting.Development.json" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/BuildingBlocks/">
+    <File Path="src/BuildingBlocks/Build/ServicePackages.props" />
     <Project Path="src\BuildingBlocks\EventBus\EventBus.csproj" />
+  </Folder>
+  <Folder Name="/src/Cart/">
+    <Project Path="src\Services\Cart\Cart.API\Cart.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Identity/">
+    <Project Path="src/Services/Identity/Identity.API/Identity.API.csproj" Id="4532313f-fa14-4672-a402-852c03f1270f" />
+    <Project Path="src/Services/Identity/Identity.Domain/Identity.Domain.csproj" Id="5549a612-66ee-4c16-9017-75a122dac2be" />
+    <Project Path="src/Services/Identity/Identity.Infrastructure/Identity.Infrastructure.csproj" Id="87a311ee-6288-40f0-addc-442321f6e08c" />
+  </Folder>
+  <Folder Name="/src/Order/">
     <Project Path="src\Services\Order\Order.API\Order.API.csproj" />
     <Project Path="src\Services\Order\Order.Domain\Order.Domain.csproj" />
     <Project Path="src\Services\Order\Order.Infrastructure\Order.Infrastructure.csproj" />
-    <Project Path="src\Services\Cart\Cart.API\Cart.API.csproj" />
-    <Project Path="src\Services\Cart\Cart.Domain\Cart.Domain.csproj" />
-    <Project Path="src\Services\Cart\Cart.Infrastructure\Cart.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Product/">
     <Project Path="src\Services\Product\Product.API\Product.API.csproj" />
     <Project Path="src\Services\Product\Product.Domain\Product.Domain.csproj" />
     <Project Path="src\Services\Product\Product.Infrastructure\Product.Infrastructure.csproj" />

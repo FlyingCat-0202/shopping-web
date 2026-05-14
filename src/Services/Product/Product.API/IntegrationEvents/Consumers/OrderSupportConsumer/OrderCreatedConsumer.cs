@@ -66,6 +66,7 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
                     UnitPrice = productById[i.ProductId].Price
                 })]
             }, context.CancellationToken);
+
             await dbContext.SaveChangesAsync(context.CancellationToken);
             if (logger.IsEnabled(LogLevel.Information))
             {

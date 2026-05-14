@@ -1,53 +1,57 @@
-using EventBus.Contracts;
 using EventBus.Extensions;
-using EventBus.Infrastructure;
+using Identity.API.Endpoints;
+using Identity.Domain.Models;
+using Identity.Infrastructure.Data;
 using MassTransit;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
-using Order.API.Endpoints;
-using Order.API.IntegrationEvents.Consumer;
-using Order.Infrastructure.BackgroundJobs;
-using Order.Infrastructure.Data;
-using Order.Infrastructure.Idempotency;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── DbContext ────────────────────────────────────────────────────────────────
-builder.Services.AddDbContext<OrderDbContext>(options =>
+// ── DbContext (PostgreSQL) ──────────────────────────────────────────────────
+builder.Services.AddDbContext<IdentityAppDbContext>(options =>
 {
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("order-db")
+        builder.Configuration.GetConnectionString("identity-db")
             ?? builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=order-db;Username=postgres;Password=postgres",
+            ?? throw new InvalidOperationException("Missing connection string 'identity-db'."),
         npgsql =>
         {
-            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Order", "order");
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorCodesToAdd: null);
+            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Identity", "identity");
+            npgsql.EnableRetryOnFailure(5);
         });
 });
+
+// ── ASP.NET Core Identity ───────────────────────────────────────────────────
+builder.Services.AddIdentity<Customer, IdentityRole<Guid>>(options =>
+{
+    options.Password.RequireDigit = false;
+    options.Password.RequiredLength = 6;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+})
+.AddEntityFrameworkStores<IdentityAppDbContext>()
+.AddDefaultTokenProviders();
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
-builder.Services.AddHostedService<OrderTimeoutService>();
-builder.Services.AddScoped<IIdempotencyService, OrderIdempotencyService>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Order API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Identity API", Version = "v1" });
+
     var bearerSchemeId = "Bearer";
     c.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
     {
         Type = SecuritySchemeType.Http,
         Scheme = "bearer",
-        BearerFormat = "JWT"
+        BearerFormat = "JWT",
+        Description = "Nhập JWT token để xác thực."
     });
     c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
     {
@@ -55,19 +59,17 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// ── JWT Auth ──────────────────────────────────────────────────────────────────
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+// ── JWT Configuration ────────────────────────────────────────────────────────
+// Lưu ý: Identity API chủ yếu phát hành Token, nhưng vẫn cần Auth để bảo vệ các Endpoint Profile/User.
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
 {
     var jwtSection = builder.Configuration.GetSection("Jwt");
-    var key = jwtSection["Key"];
-
-    if (string.IsNullOrWhiteSpace(key))
-    {
-        if (!builder.Environment.IsDevelopment())
-            throw new InvalidOperationException("Jwt:Key not configured");
-
-        key = "development-only-order-service-signing-key-please-use-user-secrets";
-    }
+    var key = jwtSection["Key"] ?? "development-only-identity-service-signing-key-123456";
 
     options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
     {
@@ -81,43 +83,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
             System.Text.Encoding.UTF8.GetBytes(key))
     };
 });
+
 builder.Services.AddAuthorization();
 
-// ── MassTransit + RabbitMQ ────────────────────────────────────────────────────
+// ── MassTransit + RabbitMQ (Outbox Pattern) ──────────────────────────────────
 builder.Services.AddMassTransit(x =>
 {
     x.SetKebabCaseEndpointNameFormatter();
 
-    x.AddEntityFrameworkOutbox<OrderDbContext>(o =>
+    // Sử dụng Outbox để đảm bảo sự kiện UserCreated được gửi thành công sau khi DB lưu thành công
+    x.AddEntityFrameworkOutbox<IdentityAppDbContext>(o =>
     {
         o.UsePostgres();
         o.UseBusOutbox();
     });
-
-    x.AddConsumer<StockReservedConsumer>();
-    x.AddConsumer<StockReservationFailedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.UseMessageRetry(r => r.Incremental(3, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
         cfg.Host(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://guest:guest@localhost:5672/"));
 
-        cfg.ReceiveEndpoint("stock-reserved", e =>
-        {
-            e.UseEntityFrameworkOutbox<OrderDbContext>(context);
-            e.ConfigureConsumer<StockReservedConsumer>(context);
-        });
-        cfg.ReceiveEndpoint("stock-reservation-failed", e =>
-        {
-            e.UseEntityFrameworkOutbox<OrderDbContext>(context);
-            e.ConfigureConsumer<StockReservationFailedConsumer>(context);
-        });
+        cfg.ConfigureEndpoints(context);
     });
 });
 
 var app = builder.Build();
 
-await app.MigrateDatabaseAsync<OrderDbContext>();
+await app.MigrateDatabaseAsync<IdentityAppDbContext>();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
@@ -126,7 +118,7 @@ app.UseHttpLogging();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Order API v1"));
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Identity API v1"));
 }
 
 app.UseAuthentication();
@@ -134,6 +126,8 @@ app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapHealthChecks("/health");
-app.MapOrderEndpoints();
+
+// Đăng ký các Endpoint Đăng nhập, Đăng ký, Logout từ Module Identity
+app.MapIdentityEndpoints();
 
 app.Run();

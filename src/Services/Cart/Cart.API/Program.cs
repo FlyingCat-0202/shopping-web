@@ -1,16 +1,15 @@
-using Cart.API.Clients;
+using Cart.API.CartStore;
+using Cart.API.Idempotency;
 using Cart.API.IntegrationEvents.Consumers;
 using Cart.API.Endpoints;
 using Cart.API.Validators;
-using Cart.Infrastructure.Data;
-using Cart.Infrastructure.Idempotency;
 using EventBus.Infrastructure;
 using FluentValidation;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using StackExchange.Redis;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,31 +18,15 @@ builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
 
-builder.Services.AddDbContext<CartDbContext>(options =>
-{
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("cart-db")
-            ?? builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=cart-db;Username=postgres;Password=postgres",
-        npgsql =>
-        {
-            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Cart", "cart");
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorCodesToAdd: null);
-        });
-});
-
 builder.Services.AddValidatorsFromAssemblyContaining<CartItemValidator>();
-
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddHttpClient<IProductCatalogClient, ProductCatalogClient>((serviceProvider, client) =>
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
-    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-    var productServiceUrl = configuration["Services:ProductServiceUrl"] ?? "http://localhost:5133";
-    client.BaseAddress = new Uri(productServiceUrl);
+    var connectionString = builder.Configuration.GetConnectionString("redis") ?? "localhost:6379";
+    var options = ConfigurationOptions.Parse(connectionString);
+    options.AbortOnConnectFail = false;
+    return ConnectionMultiplexer.Connect(options);
 });
+builder.Services.AddSingleton<ICartStore, RedisCartStore>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -88,14 +71,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     };
 });
 builder.Services.AddAuthorization();
-builder.Services.AddScoped<IIdempotencyService, CartIdempotencyService>();
+builder.Services.AddSingleton<IIdempotencyService, RedisCartIdempotencyService>();
 
 builder.Services.AddMassTransit(x =>
 {
     x.SetKebabCaseEndpointNameFormatter();
 
     x.AddConsumer<CartItemsRemovedConsumer>();
-    x.AddConsumer<ProductDeletedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -105,11 +87,6 @@ builder.Services.AddMassTransit(x =>
         cfg.ReceiveEndpoint("cart-items-removed", e =>
         {
             e.ConfigureConsumer<CartItemsRemovedConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("product-deleted-cart", e =>
-        {
-            e.ConfigureConsumer<ProductDeletedConsumer>(context);
         });
     });
 });
