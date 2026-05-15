@@ -3,6 +3,7 @@ using Cart.API.Idempotency;
 using Cart.API.IntegrationEvents.Consumers;
 using Cart.API.Endpoints;
 using Cart.API.Validators;
+using EventBus.Extensions;
 using EventBus.Infrastructure;
 using FluentValidation;
 using MassTransit;
@@ -17,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
+builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
 
 builder.Services.AddValidatorsFromAssemblyContaining<CartItemValidator>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
@@ -95,6 +97,7 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseHttpLogging();
+app.UseFrontendCors();
 
 if (app.Environment.IsDevelopment())
 {

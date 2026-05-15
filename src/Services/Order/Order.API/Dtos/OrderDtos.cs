@@ -18,6 +18,9 @@ public record OrderItemDto
 public record OrderSummaryResponse(Guid Id, DateTime OrderDate, decimal TotalAmount,
     string Status, string PaymentStatus, bool CanCancel, bool CanTrack, bool CanReturn);
 
+public record AdminOrderSummaryResponse(Guid Id, Guid CustomerId, DateTime OrderDate, decimal TotalAmount,
+    string Status, string PaymentStatus, bool CanCancel, bool CanTrack, bool CanReturn);
+
 public record OrderDetailResponse(Guid Id, DateTime OrderDate, decimal TotalAmount,
     string ReceiverName, string PhoneNumber, string ShippingAddress,
     string PaymentMethod, string Status, string PaymentStatus,

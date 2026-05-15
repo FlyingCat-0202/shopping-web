@@ -1,12 +1,13 @@
 using EventBus.Extensions;
 using EventBus.Infrastructure;
+using FluentValidation;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Product.API.Endpoints;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
-using Product.API.IntegrationEvents.Consumers.Self;
+using Product.API.Validators;
 using Product.Infrastructure.Data;
 using Product.Infrastructure.Idempotency;
 
@@ -34,7 +35,9 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
+builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<IIdempotencyService, ProductIdempotencyService>();
+builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -96,9 +99,6 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<OrderCreatedConsumer>();
     x.AddConsumer<OrderCancelledConsumer>();
     x.AddConsumer<OrderReturnedConsumer>();
-    x.AddConsumer<ProductCreationConsumer>();
-    x.AddConsumer<ProductDeleteConsumer>();
-    x.AddConsumer<ProductUpdateConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -122,24 +122,6 @@ builder.Services.AddMassTransit(x =>
             e.UseEntityFrameworkOutbox<ProductDbContext>(context);
             e.ConfigureConsumer<OrderReturnedConsumer>(context);
         });
-
-        cfg.ReceiveEndpoint("product-creation", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<ProductCreationConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("product-delete", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<ProductDeleteConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("product-update", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<ProductUpdateConsumer>(context);
-        });
     });
 });
 
@@ -150,6 +132,7 @@ await app.MigrateDatabaseAsync<ProductDbContext>();
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 app.UseHttpLogging();
+app.UseFrontendCors();
 
 if (app.Environment.IsDevelopment())
 {

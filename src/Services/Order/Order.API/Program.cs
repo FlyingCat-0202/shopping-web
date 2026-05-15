@@ -34,6 +34,7 @@ builder.Services.AddDbContext<OrderDbContext>(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
+builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
 builder.Services.AddHostedService<OrderTimeoutService>();
 builder.Services.AddScoped<IIdempotencyService, OrderIdempotencyService>();
 
@@ -122,6 +123,7 @@ await app.MigrateDatabaseAsync<OrderDbContext>();
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 app.UseHttpLogging();
+app.UseFrontendCors();
 
 if (app.Environment.IsDevelopment())
 {

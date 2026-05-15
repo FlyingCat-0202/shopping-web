@@ -2,9 +2,6 @@
   <Folder Name="/AppHost/">
     <Project Path="AppHost\AppHost.csproj" />
   </Folder>
-  <Folder Name="/Solution Items/">
-    <File Path="appsetting.Development.json" />
-  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/BuildingBlocks/">
     <File Path="src/BuildingBlocks/Build/ServicePackages.props" />

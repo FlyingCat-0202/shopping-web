@@ -35,6 +35,7 @@ public static class OrderEndpoints
 
         // Admin endpoints
         var admin = group.MapGroup("/").RequireAuthorization(EndpointHelpers.AdminOnly);
+        admin.MapGet("/admin", GetAllOrders).WithName("GetAdminOrders");
         admin.MapPut("/{id:guid}/return-approve", ApproveReturn);
         admin.MapPut("/{id:guid}/return-reject", RejectReturn);
         admin.MapPut("/{id:guid}/ship", ShipOrder);
@@ -196,6 +197,49 @@ public static class OrderEndpoints
     }
 
     // ── Admin Handlers ────────────────────────────────────────────────────────
+
+    private static async Task<IResult> GetAllOrders(
+        OrderDbContext db,
+        CancellationToken cancellationToken,
+        int pageIndex = 0,
+        int pageSize = 10,
+        string? status = null)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        pageIndex = Math.Max(pageIndex, 0);
+
+        var query = db.Orders.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<OrderStatus>(status, true, out var orderStatus))
+                return Results.BadRequest(new { message = "Trạng thái đơn hàng không hợp lệ." });
+
+            query = query.Where(o => o.Status == orderStatus);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var ordersDb = await query
+            .OrderByDescending(o => o.OrderDate)
+            .Skip(pageIndex * pageSize)
+            .Take(pageSize)
+            .Select(o => new { o.Id, o.CustomerId, o.OrderDate, o.TotalAmount, o.Status, o.PaymentMethod })
+            .ToListAsync(cancellationToken);
+
+        var orders = ordersDb.Select(o => new AdminOrderSummaryResponse(
+            o.Id,
+            o.CustomerId,
+            o.OrderDate,
+            o.TotalAmount,
+            o.Status.ToString(),
+            OrderEntity.ComputePaymentState(o.Status, o.PaymentMethod).ToString(),
+            o.Status == OrderStatus.Processing,
+            o.Status != OrderStatus.Pending && o.Status != OrderStatus.Cancelled,
+            o.Status == OrderStatus.Delivered)).ToList();
+
+        return Results.Ok(new PagedResult<AdminOrderSummaryResponse>(orders, totalCount, pageIndex, pageSize));
+    }
 
     private static async Task<IResult> ApproveReturn(
         Guid id,

@@ -1,5 +1,6 @@
 using EventBus.Extensions;
 using Identity.API.Endpoints;
+using Identity.API.Seed;
 using Identity.Domain.Models;
 using Identity.Infrastructure.Data;
 using MassTransit;
@@ -38,6 +39,7 @@ builder.Services.AddIdentity<Customer, IdentityRole<Guid>>(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
+builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -110,10 +112,12 @@ builder.Services.AddMassTransit(x =>
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync<IdentityAppDbContext>();
+await IdentitySeedData.SeedAdminAsync(app);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseExceptionHandler();
 app.UseHttpLogging();
+app.UseFrontendCors();
 
 if (app.Environment.IsDevelopment())
 {
