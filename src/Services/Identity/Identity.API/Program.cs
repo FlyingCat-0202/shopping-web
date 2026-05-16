@@ -64,7 +64,7 @@ builder.Services.AddSwaggerGen(c =>
 
 // ── JWT Configuration ────────────────────────────────────────────────────────
 // Identity API chủ yếu phát hành token, nhưng vẫn cần auth để bảo vệ profile/user endpoints.
-builder.Services.AddJwtAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
 // ── MassTransit + RabbitMQ (Outbox Pattern) ──────────────────────────────────

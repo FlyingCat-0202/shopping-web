@@ -1,4 +1,4 @@
-using System.Text;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
@@ -11,7 +11,6 @@ namespace ServiceDefault;
 public static class ServiceDefaultExtensions
 {
     private const string FrontendCorsPolicy = "FrontendCors";
-    private const string DevelopmentJwtKey = "development-only-shopping-service-signing-key-please-use-user-secrets";
 
     public static WebApplicationBuilder AddApiServiceDefaults(this WebApplicationBuilder builder)
     {
@@ -25,22 +24,12 @@ public static class ServiceDefaultExtensions
 
     public static IServiceCollection AddJwtAuthentication(
         this IServiceCollection services,
-        IConfiguration configuration,
-        IHostEnvironment environment)
+        IConfiguration configuration)
     {
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
         {
             var jwtSection = configuration.GetSection("Jwt");
-            var key = jwtSection["Key"];
-
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                if (!environment.IsDevelopment())
-                    throw new InvalidOperationException("Jwt:Key not configured");
-
-                key = DevelopmentJwtKey;
-            }
-
+            var publicKey = jwtSection["PublicKey"] ?? throw new InvalidOperationException("Jwt:PublicKey not configured");
             var issuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer not configured");
             var audience = jwtSection["Audience"] ?? throw new InvalidOperationException("Jwt:Audience not configured");
 
@@ -52,11 +41,18 @@ public static class ServiceDefaultExtensions
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = issuer,
                 ValidAudience = audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
+                IssuerSigningKey = CreateRsaSecurityKeyFromPem(publicKey)
             };
         });
 
         return services;
+    }
+
+    public static RsaSecurityKey CreateRsaSecurityKeyFromPem(string pem)
+    {
+        var rsa = RSA.Create();
+        rsa.ImportFromPem(pem);
+        return new RsaSecurityKey(rsa);
     }
 
     public static WebApplication UseApiServiceDefaults(this WebApplication app)

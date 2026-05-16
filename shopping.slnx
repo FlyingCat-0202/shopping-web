@@ -23,6 +23,11 @@
     <Project Path="src\Services\Order\Order.Domain\Order.Domain.csproj" />
     <Project Path="src\Services\Order\Order.Infrastructure\Order.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Payment/">
+    <Project Path="src\Services\Payment\Payment.API\Payment.API.csproj" />
+    <Project Path="src\Services\Payment\Payment.Domain\Payment.Domain.csproj" />
+    <Project Path="src\Services\Payment\Payment.Infrastructure\Payment.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Product/">
     <Project Path="src\Services\Product\Product.API\Product.API.csproj" />
     <Project Path="src\Services\Product\Product.Domain\Product.Domain.csproj" />

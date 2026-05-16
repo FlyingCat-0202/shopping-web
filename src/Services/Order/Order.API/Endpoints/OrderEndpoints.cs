@@ -119,8 +119,9 @@ public static class OrderEndpoints
             o.Id, o.OrderDate, o.TotalAmount,
             o.Status.ToString(),
             OrderEntity.ComputePaymentState(o.Status, o.PaymentMethod).ToString(),
-            o.Status == OrderStatus.Processing,
-            o.Status != OrderStatus.Pending && o.Status != OrderStatus.Cancelled,
+            o.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            o.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
+                or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
             o.Status == OrderStatus.Delivered)).ToList();
 
         return Results.Ok(new PagedResult<OrderSummaryResponse>(orders, totalCount, pageIndex, pageSize));
@@ -136,19 +137,35 @@ public static class OrderEndpoints
             return Results.Unauthorized();
 
         var order = await db.Orders.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.Id == id && o.CustomerId == customerId, cancellationToken);
+            .Where(o => o.Id == id && o.CustomerId == customerId)
+            .Select(o => new
+            {
+                o.Id,
+                o.OrderDate,
+                o.TotalAmount,
+                o.DeliveryDetails.ReceiverName,
+                o.DeliveryDetails.PhoneNumber,
+                o.DeliveryDetails.ShippingAddress,
+                o.PaymentMethod,
+                o.Status,
+                Items = o.Items
+                    .Select(od => new OrderItemResponse(od.ProductId, od.Quantity, od.UnitPrice))
+                    .ToList()
+            })
+            .FirstOrDefaultAsync(cancellationToken);
         if (order == null) return Results.NotFound();
-
-        var items = await db.OrderDetails.AsNoTracking()
-            .Where(od => od.OrderId == order.Id)
-            .Select(od => new OrderItemResponse(od.ProductId, od.Quantity, od.UnitPrice))
-            .ToListAsync(cancellationToken);
 
         return Results.Ok(new OrderDetailResponse(
             order.Id, order.OrderDate, order.TotalAmount,
-            order.DeliveryDetails.ReceiverName, order.DeliveryDetails.PhoneNumber, order.DeliveryDetails.ShippingAddress,
-            order.PaymentMethod.ToString(), order.Status.ToString(), order.PaymentState.ToString(),
-            order.CanCancel(), order.CanTrack(), order.CanReturn(), items));
+            order.ReceiverName, order.PhoneNumber, order.ShippingAddress,
+            order.PaymentMethod.ToString(),
+            order.Status.ToString(),
+            OrderEntity.ComputePaymentState(order.Status, order.PaymentMethod).ToString(),
+            order.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            order.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
+                or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
+            order.Status == OrderStatus.Delivered,
+            order.Items));
     }
 
     private static async Task<IResult> CancelOrder(
@@ -234,8 +251,9 @@ public static class OrderEndpoints
             o.TotalAmount,
             o.Status.ToString(),
             OrderEntity.ComputePaymentState(o.Status, o.PaymentMethod).ToString(),
-            o.Status == OrderStatus.Processing,
-            o.Status != OrderStatus.Pending && o.Status != OrderStatus.Cancelled,
+            o.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            o.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
+                or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
             o.Status == OrderStatus.Delivered)).ToList();
 
         return Results.Ok(new PagedResult<AdminOrderSummaryResponse>(orders, totalCount, pageIndex, pageSize));

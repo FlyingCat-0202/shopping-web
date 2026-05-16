@@ -42,7 +42,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddJwtAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<IIdempotencyService, RedisCartIdempotencyService>();
 

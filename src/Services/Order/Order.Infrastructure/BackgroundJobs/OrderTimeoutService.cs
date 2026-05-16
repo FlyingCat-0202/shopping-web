@@ -22,6 +22,8 @@ public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<Order
                 var timeoutThreshold = DateTime.UtcNow.AddMinutes(-15);
                 var expiredOrders = await dbContext.Orders
                     .Where(o => o.Status == OrderStatus.Pending && o.OrderDate < timeoutThreshold)
+                    .OrderBy(o => o.OrderDate)
+                    .Take(100)
                     .ToListAsync(stoppingToken);
 
                 if (expiredOrders.Count > 0)
@@ -29,7 +31,7 @@ public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<Order
                     foreach (var order in expiredOrders)
                     {
                         order.CancelDueToStockFailure();
-                        logger.LogWarning("Order {OrderId} đã bị hủy tự động do quá thời gian chờ (Pending > 15 phút)", order.Id);
+                        logger.LogWarning("Order {OrderId} đã bị hủy tự động do quá thời gian chờ giữ kho", order.Id);
                     }
                     await dbContext.SaveChangesAsync(stoppingToken);
                 }

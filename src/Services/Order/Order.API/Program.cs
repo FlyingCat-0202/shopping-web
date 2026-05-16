@@ -56,7 +56,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── JWT Auth ──────────────────────────────────────────────────────────────────
-builder.Services.AddJwtAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
 // ── MassTransit + RabbitMQ ────────────────────────────────────────────────────
@@ -72,6 +72,8 @@ builder.Services.AddMassTransit(x =>
 
     x.AddConsumer<StockReservedConsumer>();
     x.AddConsumer<StockReservationFailedConsumer>();
+    x.AddConsumer<PaymentSucceededConsumer>();
+    x.AddConsumer<PaymentFailedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -87,6 +89,16 @@ builder.Services.AddMassTransit(x =>
         {
             e.UseEntityFrameworkOutbox<OrderDbContext>(context);
             e.ConfigureConsumer<StockReservationFailedConsumer>(context);
+        });
+        cfg.ReceiveEndpoint("payment-succeeded", e =>
+        {
+            e.UseEntityFrameworkOutbox<OrderDbContext>(context);
+            e.ConfigureConsumer<PaymentSucceededConsumer>(context);
+        });
+        cfg.ReceiveEndpoint("payment-failed", e =>
+        {
+            e.UseEntityFrameworkOutbox<OrderDbContext>(context);
+            e.ConfigureConsumer<PaymentFailedConsumer>(context);
         });
     });
 });

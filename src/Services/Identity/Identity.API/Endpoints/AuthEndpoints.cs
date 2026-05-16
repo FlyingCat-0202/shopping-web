@@ -1,19 +1,18 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using Identity.API.Dtos;
 using Identity.Domain.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using EventBus.Infrastructure;
+using ServiceDefault;
 
 namespace Identity.API.Endpoints;
 
 public static class AuthEndpoints
 {
 	private const string CustomerRole = "Customer";
-
     public static void MapIdentityEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/auth").WithTags("Auth");
@@ -26,6 +25,7 @@ public static class AuthEndpoints
             {
 	        var email = NormalizeEmail(request.Email);
 
+            // ── Check for existing email or phone number ───────────────────────────────────────────────
             if (await userManager.FindByEmailAsync(email) is not null)
             {
                 return Results.BadRequest(new { message = "Email already exists." });
@@ -145,7 +145,7 @@ public static class AuthEndpoints
     private static string CreateJwtToken(Customer user, IEnumerable<string> roles, IConfiguration configuration)
     {
         var jwtSection = configuration.GetSection("Jwt");
-        var key = jwtSection["Key"] ?? throw new InvalidOperationException("Missing Jwt:Key configuration.");
+        var privateKey = jwtSection["PrivateKey"] ?? throw new InvalidOperationException("Missing Jwt:PrivateKey configuration.");
         var issuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("Missing Jwt:Issuer configuration.");
         var audience = jwtSection["Audience"] ?? throw new InvalidOperationException("Missing Jwt:Audience configuration.");
         var minutes = int.TryParse(jwtSection["ExpiresMinutes"], out var value) ? value : 60;
@@ -161,8 +161,8 @@ public static class AuthEndpoints
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
         var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
-            SecurityAlgorithms.HmacSha256);
+            ServiceDefaultExtensions.CreateRsaSecurityKeyFromPem(privateKey),
+            SecurityAlgorithms.RsaSha256);
 
         var token = new JwtSecurityToken(
             issuer: issuer,

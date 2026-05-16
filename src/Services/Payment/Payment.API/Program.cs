@@ -1,30 +1,26 @@
 using EventBus.Extensions;
 using EventBus.Infrastructure;
-using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
-using Product.API.Endpoints;
-using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
-using Product.API.IntegrationEvents.Consumers.Self;
-using Product.API.Validators;
-using Product.Infrastructure.Data;
-using Product.Infrastructure.Idempotency;
+using Payment.API.BackgroundJobs;
+using Payment.API.Endpoints;
+using Payment.API.IntegrationEvents.Consumers;
+using Payment.Infrastructure.Data;
 using ServiceDefault;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ── DbContext ────────────────────────────────────────────────────────────────
-builder.Services.AddDbContext<ProductDbContext>(options =>
+builder.Services.AddDbContext<PaymentDbContext>(options =>
 {
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("product-db")
+        builder.Configuration.GetConnectionString("payment-db")
             ?? builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Missing connection string. Set ConnectionStrings__product-db or run the service through Aspire AppHost."),
+            ?? "Host=localhost;Port=5432;Database=payment-db;Username=postgres;Password=postgres",
         npgsql =>
         {
-            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Product", "product");
+            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Payment", "payment");
             npgsql.EnableRetryOnFailure(
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(30),
@@ -34,14 +30,13 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.AddApiServiceDefaults();
-builder.Services.AddScoped<IIdempotencyService, ProductIdempotencyService>();
-builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
+builder.Services.AddHostedService<PaymentTimeoutService>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Product API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Payment API", Version = "v1" });
     var bearerSchemeId = "Bearer";
     c.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
     {
@@ -64,65 +59,30 @@ builder.Services.AddMassTransit(x =>
 {
     x.SetKebabCaseEndpointNameFormatter();
 
-    x.AddEntityFrameworkOutbox<ProductDbContext>(o =>
+    x.AddEntityFrameworkOutbox<PaymentDbContext>(o =>
     {
         o.UsePostgres();
         o.UseBusOutbox();
     });
 
-    x.AddConsumer<OrderCreatedConsumer>();
-    x.AddConsumer<OrderCancelledConsumer>();
-    x.AddConsumer<OrderReturnedConsumer>();
-    x.AddConsumer<ProductCreationConsumer>();
-    x.AddConsumer<ProductDeleteConsumer>();
-    x.AddConsumer<ProductUpdateConsumer>();
+    x.AddConsumer<PaymentRequestedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.UseMessageRetry(r => r.Incremental(3, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
         cfg.Host(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://guest:guest@localhost:5672/"));
 
-        cfg.ReceiveEndpoint("order-created", e =>
+        cfg.ReceiveEndpoint("payment-requested", e =>
         {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<OrderCreatedConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("order-cancelled", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<OrderCancelledConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("order-returned", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<OrderReturnedConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("product-creation", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<ProductCreationConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("product-delete", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<ProductDeleteConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("product-update", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<ProductUpdateConsumer>(context);
+            e.UseEntityFrameworkOutbox<PaymentDbContext>(context);
+            e.ConfigureConsumer<PaymentRequestedConsumer>(context);
         });
     });
 });
 
 var app = builder.Build();
 
-await app.MigrateDatabaseAsync<ProductDbContext>();
+await app.MigrateDatabaseAsync<PaymentDbContext>();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();
@@ -130,7 +90,7 @@ app.UseApiServiceDefaults();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Product API v1"));
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Payment API v1"));
 }
 
 app.UseAuthentication();
@@ -138,6 +98,6 @@ app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapHealthChecks("/health");
-app.MapProductEndpoints();
+app.MapPaymentEndpoints();
 
 app.Run();

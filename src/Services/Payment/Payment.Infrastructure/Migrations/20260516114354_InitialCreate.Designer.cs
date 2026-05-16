@@ -2,22 +2,25 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using Order.Infrastructure.Data;
+using Payment.Infrastructure.Data;
 
 #nullable disable
 
-namespace Order.Infrastructure.Migrations
+namespace Payment.Infrastructure.Migrations
 {
-    [DbContext(typeof(OrderDbContext))]
-    partial class OrderDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(PaymentDbContext))]
+    [Migration("20260516114354_InitialCreate")]
+    partial class InitialCreate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasDefaultSchema("order")
+                .HasDefaultSchema("payment")
                 .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -67,7 +70,7 @@ namespace Order.Infrastructure.Migrations
 
                     b.HasIndex("Delivered");
 
-                    b.ToTable("InboxState", "order");
+                    b.ToTable("InboxState", "payment");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
@@ -158,7 +161,7 @@ namespace Order.Infrastructure.Migrations
                     b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber")
                         .IsUnique();
 
-                    b.ToTable("OutboxMessage", "order");
+                    b.ToTable("OutboxMessage", "payment");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxState", b =>
@@ -188,85 +191,61 @@ namespace Order.Infrastructure.Migrations
 
                     b.HasIndex("Created");
 
-                    b.ToTable("OutboxState", "order");
+                    b.ToTable("OutboxState", "payment");
                 });
 
-            modelBuilder.Entity("Order.Domain.Entities.Order", b =>
+            modelBuilder.Entity("Payment.Domain.Entities.PaymentTransaction", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("OrderDate")
+                    b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("PaymentMethod")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId", "OrderDate")
-                        .HasDatabaseName("IX_Orders_CustomerId_OrderDate");
-
-                    b.HasIndex("Status", "OrderDate")
-                        .HasDatabaseName("IX_Orders_Status_OrderDate");
-
-                    b.ToTable("Orders", "order", t =>
-                        {
-                            t.HasCheckConstraint("CK_Orders_TotalAmount", "\"TotalAmount\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("Order.Domain.Entities.OrderDetail", b =>
-                {
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("OrderId", "ProductId");
-
-                    b.HasIndex("ProductId")
-                        .HasDatabaseName("IX_OrderDetails_ProductId");
-
-                    b.ToTable("OrderDetails", "order", t =>
-                        {
-                            t.HasCheckConstraint("CK_OrderDetails_Quantity", "\"Quantity\" > 0");
-
-                            t.HasCheckConstraint("CK_OrderDetails_UnitPrice", "\"UnitPrice\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("Order.Infrastructure.Data.IdempotentRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.HasKey("Id");
 
-                    b.ToTable("IdempotentRequests", "order");
+                    b.HasIndex("OrderId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Payments_OrderId");
+
+                    b.HasIndex("CustomerId", "CreatedAt")
+                        .HasDatabaseName("IX_Payments_CustomerId_CreatedAt");
+
+                    b.ToTable("Payments", "payment", t =>
+                        {
+                            t.HasCheckConstraint("CK_Payments_Amount", "\"Amount\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
@@ -279,56 +258,6 @@ namespace Order.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId");
-                });
-
-            modelBuilder.Entity("Order.Domain.Entities.Order", b =>
-                {
-                    b.OwnsOne("Order.Domain.Entities.DeliveryInfo", "DeliveryDetails", b1 =>
-                        {
-                            b1.Property<Guid>("OrderId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("PhoneNumber")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("PhoneNumber");
-
-                            b1.Property<string>("ReceiverName")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("ReceiverName");
-
-                            b1.Property<string>("ShippingAddress")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("ShippingAddress");
-
-                            b1.HasKey("OrderId");
-
-                            b1.ToTable("Orders", "order");
-
-                            b1.WithOwner()
-                                .HasForeignKey("OrderId");
-                        });
-
-                    b.Navigation("DeliveryDetails")
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Order.Domain.Entities.OrderDetail", b =>
-                {
-                    b.HasOne("Order.Domain.Entities.Order", "Order")
-                        .WithMany("Items")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("Order.Domain.Entities.Order", b =>
-                {
-                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }
