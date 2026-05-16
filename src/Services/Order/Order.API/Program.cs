@@ -1,15 +1,16 @@
-using EventBus.Contracts;
 using EventBus.Extensions;
 using EventBus.Infrastructure;
+using FluentValidation;
 using MassTransit;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Order.API.Endpoints;
 using Order.API.IntegrationEvents.Consumer;
+using Order.API.Validators;
 using Order.Infrastructure.BackgroundJobs;
 using Order.Infrastructure.Data;
 using Order.Infrastructure.Idempotency;
+using ServiceDefault;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,12 +32,10 @@ builder.Services.AddDbContext<OrderDbContext>(options =>
 });
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
-builder.Services.AddProblemDetails();
-builder.Services.AddHealthChecks();
-builder.Services.AddHttpLogging();
-builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
+builder.AddApiServiceDefaults();
 builder.Services.AddHostedService<OrderTimeoutService>();
 builder.Services.AddScoped<IIdempotencyService, OrderIdempotencyService>();
+builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderValidator>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -57,31 +56,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── JWT Auth ──────────────────────────────────────────────────────────────────
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
-{
-    var jwtSection = builder.Configuration.GetSection("Jwt");
-    var key = jwtSection["Key"];
-
-    if (string.IsNullOrWhiteSpace(key))
-    {
-        if (!builder.Environment.IsDevelopment())
-            throw new InvalidOperationException("Jwt:Key not configured");
-
-        key = "development-only-order-service-signing-key-please-use-user-secrets";
-    }
-
-    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSection["Issuer"],
-        ValidAudience = jwtSection["Audience"],
-        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-            System.Text.Encoding.UTF8.GetBytes(key))
-    };
-});
+builder.Services.AddJwtAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization();
 
 // ── MassTransit + RabbitMQ ────────────────────────────────────────────────────
@@ -121,9 +96,7 @@ var app = builder.Build();
 await app.MigrateDatabaseAsync<OrderDbContext>();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.UseExceptionHandler();
-app.UseHttpLogging();
-app.UseFrontendCors();
+app.UseApiServiceDefaults();
 
 if (app.Environment.IsDevelopment())
 {

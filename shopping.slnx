@@ -2,6 +2,9 @@
   <Folder Name="/AppHost/">
     <Project Path="AppHost\AppHost.csproj" />
   </Folder>
+  <Folder Name="/ServiceDefault/">
+    <Project Path="ServiceDefault\ServiceDefault.csproj" />
+  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/BuildingBlocks/">
     <File Path="src/BuildingBlocks/Build/ServicePackages.props" />

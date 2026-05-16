@@ -3,22 +3,16 @@ using Cart.API.Idempotency;
 using Cart.API.IntegrationEvents.Consumers;
 using Cart.API.Endpoints;
 using Cart.API.Validators;
-using EventBus.Extensions;
 using EventBus.Infrastructure;
 using FluentValidation;
 using MassTransit;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using ServiceDefault;
 using StackExchange.Redis;
-using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddProblemDetails();
-builder.Services.AddHealthChecks();
-builder.Services.AddHttpLogging();
-builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
+builder.AddApiServiceDefaults();
 
 builder.Services.AddValidatorsFromAssemblyContaining<CartItemValidator>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
@@ -48,30 +42,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
-{
-    var jwtSection = builder.Configuration.GetSection("Jwt");
-    var key = jwtSection["Key"];
-
-    if (string.IsNullOrWhiteSpace(key))
-    {
-        if (!builder.Environment.IsDevelopment())
-            throw new InvalidOperationException("Jwt:Key not configured");
-
-        key = "development-only-cart-service-signing-key-please-use-user-secrets";
-    }
-
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSection["Issuer"],
-        ValidAudience = jwtSection["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
-    };
-});
+builder.Services.AddJwtAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<IIdempotencyService, RedisCartIdempotencyService>();
 
@@ -95,9 +66,7 @@ builder.Services.AddMassTransit(x =>
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
-app.UseHttpLogging();
-app.UseFrontendCors();
+app.UseApiServiceDefaults();
 
 if (app.Environment.IsDevelopment())
 {

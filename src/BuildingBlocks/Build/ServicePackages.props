@@ -3,7 +3,6 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="MassTransit" Version="8.3.3" />
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.3" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.58" Condition="'$(MSBuildProjectName)' == 'Cart.API'" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
   </ItemGroup>
@@ -27,15 +26,19 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
-		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Order.Infrastructure'">
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Identity.Infrastructure'">
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.7" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Identity.Domain'">
-		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.7" />
-		<PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.7" />
-		<PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="10.0.7" />
 	</ItemGroup>
 </Project>

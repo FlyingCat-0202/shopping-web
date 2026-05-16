@@ -44,6 +44,8 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
                     OrderId = message.OrderId,
                     Reason = $"Sản phẩm {p.Id} không đủ hàng."
                 }, context.CancellationToken);
+                await dbContext.SaveChangesAsync(context.CancellationToken);
+
                 return;
             }
         }

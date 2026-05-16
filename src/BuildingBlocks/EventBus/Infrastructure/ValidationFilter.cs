@@ -13,12 +13,7 @@ public class ValidationFilter<T> : IEndpointFilter where T : class
             return Results.BadRequest(new { message = "Request body is required." });
         }
 
-        var validator = context.HttpContext.RequestServices.GetService<IValidator<T>>();
-
-        if (validator is null)
-        {
-            return await next(context);
-        }
+        var validator = context.HttpContext.RequestServices.GetRequiredService<IValidator<T>>();
 
         var validationResult = await validator.ValidateAsync(argument);
 

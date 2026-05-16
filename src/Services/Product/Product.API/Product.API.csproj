@@ -5,6 +5,7 @@
     <ProjectReference Include="..\Product.Infrastructure\Product.Infrastructure.csproj" />
     <ProjectReference Include="..\Product.Domain\Product.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\EventBus\EventBus.csproj" />
+    <ProjectReference Include="..\..\..\..\ServiceDefault\ServiceDefault.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

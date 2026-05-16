@@ -19,11 +19,17 @@ public class ProductCreationConsumer(ProductDbContext db, ILogger<ProductCreatio
             var newProduct = new ProductEntity
             {
                 Id = Guid.NewGuid(),
-                Name = data.Name,
+                Name = data.Name.Trim(),
                 Price = data.Price,
                 StockQuantity = data.StockQuantity,
+                Description = string.IsNullOrWhiteSpace(data.Description)
+                    ? null
+                    : data.Description.Trim(),
+                ImageUrl = string.IsNullOrWhiteSpace(data.ImageUrl)
+                    ? null
+                    : data.ImageUrl.Trim(),
                 CategoryId = data.CategoryId,
-                IsActive = true,
+                IsActive = data.IsActive,
             };
 
             db.Products.Add(newProduct);
