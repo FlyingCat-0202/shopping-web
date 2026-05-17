@@ -80,6 +80,11 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
+// ── Redis Idempotency ────────────────────────────────────────────────────────
+var redisConnectionString = builder.Configuration.GetConnectionString("redis")
+    ?? throw new InvalidOperationException("Missing connection string for redis.");
+builder.Services.AddRedisIdempotency(redisConnectionString);
+
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync<PaymentDbContext>();

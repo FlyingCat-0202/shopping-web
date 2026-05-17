@@ -16,6 +16,7 @@ public enum OrderStatus
 public enum PaymentMethodType
 {
     COD,
+    MeiMei,
     CreditCard,
     PayPal
 }

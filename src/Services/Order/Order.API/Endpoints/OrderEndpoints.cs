@@ -21,25 +21,41 @@ public static class OrderEndpoints
     {
         var group = app.MapGroup("/api/order")
                        .WithTags("Orders")
-                       .RequireAuthorization()
-                       .AddEndpointFilter<IdempotencyFilter>();
+                       .RequireAuthorization();
 
         // User endpoints
         group.MapPost("/", CreateOrder)
             .AddEndpointFilter<ValidationFilter<CreateOrderRequest>>()
-            .WithName("CreateOrder");
-        group.MapGet("/", GetOrders).WithName("GetOrders");
-        group.MapGet("/{id:guid}", GetOrderById).WithName("GetOrderById");
-        group.MapPut("/{id:guid}/cancel", CancelOrder).WithName("CancelOrder");
-        group.MapPut("/{id:guid}/return-request", RequestReturn).WithName("RequestReturn");
+            .WithName("CreateOrder")
+            .AddEndpointFilter<IdempotencyFilter>();
+        group.MapGet("/", GetOrders)
+            .WithName("GetOrders");
+        group.MapGet("/{id:guid}", GetOrderById)
+            .WithName("GetOrderById");
+        group.MapPut("/{id:guid}/cancel", CancelOrder)
+            .WithName("CancelOrder")
+            .AddEndpointFilter<IdempotencyFilter>();
+        group.MapPut("/{id:guid}/return-request", RequestReturn)
+            .WithName("RequestReturn")
+            .AddEndpointFilter<IdempotencyFilter>();
 
         // Admin endpoints
-        var admin = group.MapGroup("/").RequireAuthorization(EndpointHelpers.AdminOnly);
-        admin.MapGet("/admin", GetAllOrders).WithName("GetAdminOrders");
-        admin.MapPut("/{id:guid}/return-approve", ApproveReturn);
-        admin.MapPut("/{id:guid}/return-reject", RejectReturn);
-        admin.MapPut("/{id:guid}/ship", ShipOrder);
-        admin.MapPut("/{id:guid}/deliver", DeliverOrder);
+        var admin = group.MapGroup("/")
+            .RequireAuthorization(EndpointHelpers.AdminOnly);
+        admin.MapGet("/admin", GetAllOrders)
+            .WithName("GetAdminOrders");
+        admin.MapPut("/{id:guid}/return-approve", ApproveReturn)
+            .AddEndpointFilter<IdempotencyFilter>()
+            .WithName("ApproveReturn");
+        admin.MapPut("/{id:guid}/return-reject", RejectReturn)
+            .AddEndpointFilter<IdempotencyFilter>()
+            .WithName("RejectReturn");
+        admin.MapPut("/{id:guid}/ship", ShipOrder)
+            .AddEndpointFilter<IdempotencyFilter>()
+            .WithName("ShipOrder");
+        admin.MapPut("/{id:guid}/deliver", DeliverOrder)
+            .AddEndpointFilter<IdempotencyFilter>()
+            .WithName("DeliverOrder");
     }
 
     // ── User Handlers ─────────────────────────────────────────────────────────

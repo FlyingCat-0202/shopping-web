@@ -67,4 +67,17 @@ public class PaymentTransaction
         FailureReason = string.IsNullOrWhiteSpace(reason) ? "Thanh toán thất bại." : reason;
         CompletedAt = DateTime.UtcNow;
     }
+
+    public void MarkExpired(string reason)
+    {
+        if (Status == PaymentStatus.Expired)
+            return;
+
+        if (Status != PaymentStatus.Pending)
+            throw new InvalidOperationException($"Không thể đánh dấu hết hạn thanh toán ở trạng thái {Status}.");
+
+        Status = PaymentStatus.Expired;
+        FailureReason = string.IsNullOrWhiteSpace(reason) ? "Thanh toán quá thời gian xử lý." : reason;
+        CompletedAt = DateTime.UtcNow;
+    }
 }

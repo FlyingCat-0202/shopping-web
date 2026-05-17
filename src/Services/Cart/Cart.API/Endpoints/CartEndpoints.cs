@@ -12,18 +12,17 @@ public static class CartEndpoints
     {
         var group = app.MapGroup("/api/cart")
             .WithTags("Cart")
-            .RequireAuthorization()
-            .AddEndpointFilter<IdempotencyFilter>();
+            .RequireAuthorization();
 
         group.MapGet("/", GetCart).WithName("GetCart");  // Lấy thông tin giỏ hàng hiện tại của người dùng
         group.MapPost("/items", AddItem)
             .AddEndpointFilter<ValidationFilter<CartItemRequest>>()
-            .WithName("AddCartItem");
+            .WithName("AddCartItem").AddEndpointFilter<IdempotencyFilter>();
         group.MapPut("/items/{productId:guid}", UpdateItem)
             .AddEndpointFilter<ValidationFilter<CartItemRequest>>()
-            .WithName("UpdateCartItem");
-        group.MapDelete("/items/{productId:guid}", RemoveItem).WithName("RemoveCartItem");
-        group.MapDelete("/clear", ClearCart).WithName("ClearCart");
+            .WithName("UpdateCartItem").AddEndpointFilter<IdempotencyFilter>();
+        group.MapDelete("/items/{productId:guid}", RemoveItem).WithName("RemoveCartItem").AddEndpointFilter<IdempotencyFilter>();
+        group.MapDelete("/clear", ClearCart).WithName("ClearCart").AddEndpointFilter<IdempotencyFilter>();
     }
 
     private static async Task<IResult> GetCart(

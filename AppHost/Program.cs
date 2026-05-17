@@ -57,7 +57,9 @@ builder.AddProject<Identity_API>("identity-api")
 builder.AddProject<Payment_API>("payment-api")
     .WithReference(paymentDb)
     .WithReference(rabbitmq)
+    .WithReference(redis)
     .WaitFor(paymentDb)
-    .WaitFor(rabbitmq);
+    .WaitFor(rabbitmq)
+    .WaitFor(redis);
 
 builder.Build().Run();

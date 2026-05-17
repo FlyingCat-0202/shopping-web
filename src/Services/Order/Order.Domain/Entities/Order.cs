@@ -33,7 +33,6 @@ public class Order
         };
 
     // ── Domain Behaviors ──────────────────────────────────────────────────────
-
     public void AddOrderItem(Guid productId, decimal unitPrice, int quantity)
     {
         var existing = _items.SingleOrDefault(i => i.ProductId == productId);
@@ -147,8 +146,8 @@ public class Order
             }
             : status switch
             {
-                OrderStatus.Pending or OrderStatus.PaymentPending => PaymentStatus.Unpaid,
-                OrderStatus.Cancelled or OrderStatus.Returned => PaymentStatus.Refunded,
+                OrderStatus.Pending or OrderStatus.PaymentPending or OrderStatus.Cancelled => PaymentStatus.Unpaid,
+                OrderStatus.Returned => PaymentStatus.Refunded,
                 _ => PaymentStatus.Paid
             };
 }

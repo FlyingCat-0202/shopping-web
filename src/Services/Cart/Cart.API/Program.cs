@@ -7,21 +7,12 @@ using FluentValidation;
 using MassTransit;
 using Microsoft.OpenApi;
 using ServiceDefault;
-using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddApiServiceDefaults();
 
 builder.Services.AddValidatorsFromAssemblyContaining<CartItemValidator>();
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("redis") ?? "localhost:6379";
-    var options = ConfigurationOptions.Parse(connectionString);
-    options.AbortOnConnectFail = false;
-    return ConnectionMultiplexer.Connect(options);
-});
-builder.Services.AddSingleton<ICartStore, RedisCartStore>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -67,6 +58,7 @@ var redisConnectionString = builder.Configuration.GetConnectionString("redis") ?
                             builder.Configuration.GetConnectionString("DefaultConnection") ??
                             throw new InvalidOperationException("Missing connection string for redis");
 builder.Services.AddRedisIdempotency(redisConnectionString);
+builder.Services.AddSingleton<ICartStore, RedisCartStore>();
 
 var app = builder.Build();
 

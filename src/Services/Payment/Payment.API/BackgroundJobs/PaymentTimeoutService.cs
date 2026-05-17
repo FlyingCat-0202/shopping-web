@@ -30,7 +30,7 @@ public class PaymentTimeoutService(IServiceProvider serviceProvider, ILogger<Pay
 
                 foreach (var payment in expiredPayments)
                 {
-                    payment.MarkFailed("Thanh toán quá thời gian xử lý.");
+                    payment.MarkExpired("Thanh toán quá thời gian xử lý.");
 
                     await publishEndpoint.Publish(new PaymentFailedEvent
                     {
@@ -41,7 +41,7 @@ public class PaymentTimeoutService(IServiceProvider serviceProvider, ILogger<Pay
                     }, ctx => ctx.SetRoutingKey(PaymentFailedRoutingKey), stoppingToken);
 
                     logger.LogWarning(
-                        "Payment {PaymentId} của Order {OrderId} đã bị fail do quá thời gian xử lý.",
+                        "Payment {PaymentId} của Order {OrderId} đã hết hạn do quá thời gian xử lý.",
                         payment.Id,
                         payment.OrderId);
                 }

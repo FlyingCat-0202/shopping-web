@@ -7,14 +7,8 @@ namespace EventBus.Infrastructure;
 
 public record CachedResponse(int StatusCode, object? Value);
 
-public class IdempotencyFilter : IEndpointFilter
+public class IdempotencyFilter(IConnectionMultiplexer redis) : IEndpointFilter
 {
-    private readonly IConnectionMultiplexer _redis;
-
-    public IdempotencyFilter(IConnectionMultiplexer redis)
-    {
-        _redis = redis;
-    }
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
@@ -27,7 +21,7 @@ public class IdempotencyFilter : IEndpointFilter
         }
 
         var redisKey = $"idempotency:{httpContext.Request.Path}:{requestId}";
-        var db = _redis.GetDatabase(); // Tự inject Redis Multiplexer vào class nhé
+        var db = redis.GetDatabase(); // Tự inject Redis Multiplexer vào class nhé
 
         // KHÓA REQUEST
         bool isNew = await db.StringSetAsync(redisKey, "IN_PROGRESS", TimeSpan.FromHours(24), When.NotExists);

@@ -200,7 +200,8 @@ public static class ProductEndpoints
         })
         .AddEndpointFilter<ValidationFilter<CategoryRequest>>()
         .RequireAuthorization(EndpointHelpers.AdminOnly)
-        .WithName("CreateCategory");
+        .WithName("CreateCategory")
+        .AddEndpointFilter<IdempotencyFilter>();
 
 
         // Tạo một sản phẩm với id ngẫu nhiên
