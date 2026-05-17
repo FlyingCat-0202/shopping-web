@@ -1,4 +1,5 @@
 using EventBus.Extensions;
+using EventBus.Infrastructure;
 using Identity.API.Endpoints;
 using Identity.Domain.Models;
 using Identity.Infrastructure.Data;

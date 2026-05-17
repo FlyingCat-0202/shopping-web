@@ -8,7 +8,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Shopping_web.Modules.IdentityService.Infrastructure.Migrations
+namespace Identity.Infrastructure.Migrations
 {
     [DbContext(typeof(IdentityAppDbContext))]
     partial class IdentityAppDbContextModelSnapshot : ModelSnapshot

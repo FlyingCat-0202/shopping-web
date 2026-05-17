@@ -1,5 +1,4 @@
 using Cart.API.CartStore;
-using Cart.API.Idempotency;
 using Cart.API.IntegrationEvents.Consumers;
 using Cart.API.Endpoints;
 using Cart.API.Validators;
@@ -71,7 +70,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     };
 });
 builder.Services.AddAuthorization();
-builder.Services.AddSingleton<IIdempotencyService, RedisCartIdempotencyService>();
 
 builder.Services.AddMassTransit(x =>
 {
@@ -90,6 +88,12 @@ builder.Services.AddMassTransit(x =>
         });
     });
 });
+
+// ── Add Redis ────────────────────────────────────────────────────────────────
+var redisConnectionString = builder.Configuration.GetConnectionString("redis") ??
+                            builder.Configuration.GetConnectionString("DefaultConnection") ??
+                            throw new InvalidOperationException("Missing connection string for redis");
+builder.Services.AddRedisIdempotency(redisConnectionString);
 
 var app = builder.Build();
 

@@ -17,8 +17,7 @@ public static class ProductEndpoints
     public static void MapProductEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products")
-            .WithTags("Products")
-            .AddEndpointFilter<IdempotencyFilter>();
+            .WithTags("Products");
 
         // Lấy danh sách products và categories
         group.MapGet("/", async (ProductDbContext db, ILogger<Program> logger, CancellationToken cancellationToken) =>
@@ -91,7 +90,8 @@ public static class ProductEndpoints
 
             return Results.Accepted(null, new { message = $"Yêu cầu thay đổi danh mục cho sản phẩm {productId} đang được xử lý." });
         })
-        .RequireAuthorization(EndpointHelpers.AdminOnly);
+        .RequireAuthorization(EndpointHelpers.AdminOnly)
+        .AddEndpointFilter<IdempotencyFilter>();
 
 
         // Xóa Product theo id
@@ -103,7 +103,8 @@ public static class ProductEndpoints
 
             return Results.Accepted(null, new { message = "Yêu cầu xóa/ẩn sản phẩm đã được đưa vào hàng đợi." });
         })
-        .RequireAuthorization(EndpointHelpers.AdminOnly);
+        .RequireAuthorization(EndpointHelpers.AdminOnly)
+        .AddEndpointFilter<IdempotencyFilter>();
 
 
         // Tạo một sản phẩm với id ngẫu nhiên
@@ -121,7 +122,8 @@ public static class ProductEndpoints
             return Results.Accepted(null, new { message = "Yêu cầu tạo sản phẩm đã được đưa vào hàng đợi." });
         })
         .AddEndpointFilter<ValidationFilter<ProductRequest>>()
-        .RequireAuthorization(EndpointHelpers.AdminOnly);
+        .RequireAuthorization(EndpointHelpers.AdminOnly)
+        .AddEndpointFilter<IdempotencyFilter>();
     }
 
     // Gửi message đến broker

@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Identity.Infrastructure.Migrations
 {
     [DbContext(typeof(IdentityAppDbContext))]
-    [Migration("20260514130347_AddMassTransitOutbox")]
-    partial class AddMassTransitOutbox
+    [Migration("20260517070608_IdentityDbContextInitial")]
+    partial class IdentityDbContextInitial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

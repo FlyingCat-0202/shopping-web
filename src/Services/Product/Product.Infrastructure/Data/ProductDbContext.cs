@@ -11,8 +11,6 @@ public class ProductDbContext(DbContextOptions<ProductDbContext> options) : DbCo
 
     public DbSet<ProductEntity> Products { get; set; } = null!;
 
-    public DbSet<IdempotentRequest> IdempotentRequests { get; set; } = null!;
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("product");
@@ -57,12 +55,6 @@ public class ProductDbContext(DbContextOptions<ProductDbContext> options) : DbCo
 
             entity.HasIndex(p => p.CategoryId)
                   .HasDatabaseName("IX_Products_CategoryId");
-        });
-
-        modelBuilder.Entity<IdempotentRequest>(entity =>
-        {
-            entity.ToTable("IdempotentRequests", "product");
-            entity.HasKey(r => r.Id);
         });
     }
 }

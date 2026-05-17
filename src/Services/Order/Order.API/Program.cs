@@ -9,7 +9,6 @@ using Order.API.Endpoints;
 using Order.API.IntegrationEvents.Consumer;
 using Order.Infrastructure.BackgroundJobs;
 using Order.Infrastructure.Data;
-using Order.Infrastructure.Idempotency;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,7 +34,6 @@ builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
 builder.Services.AddHostedService<OrderTimeoutService>();
-builder.Services.AddScoped<IIdempotencyService, OrderIdempotencyService>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -114,6 +112,12 @@ builder.Services.AddMassTransit(x =>
         });
     });
 });
+
+// ── Add Redis ────────────────────────────────────────────────────────────────
+var redisConnectionString = builder.Configuration.GetConnectionString("redis") ??
+                            builder.Configuration.GetConnectionString("DefaultConnection") ??
+                            throw new InvalidOperationException("Missing connection string for redis");
+builder.Services.AddRedisIdempotency(redisConnectionString);
 
 var app = builder.Build();
 

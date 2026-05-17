@@ -8,7 +8,6 @@ using Product.API.Endpoints;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
 using Product.Infrastructure.Data;
-using Product.Infrastructure.Idempotency;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,7 +33,6 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpLogging();
-builder.Services.AddScoped<IIdempotencyService, ProductIdempotencyService>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -142,6 +140,12 @@ builder.Services.AddMassTransit(x =>
         });
     });
 });
+
+// ── Add Redis ────────────────────────────────────────────────────────────────
+var redisConnectionString = builder.Configuration.GetConnectionString("redis") ??
+                            builder.Configuration.GetConnectionString("DefaultConnection") ??
+                            throw new InvalidOperationException("Missing connection string for redis");
+builder.Services.AddRedisIdempotency(redisConnectionString);
 
 var app = builder.Build();
 

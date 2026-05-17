@@ -7,26 +7,13 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Order.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class OrderDbContextInitial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.EnsureSchema(
                 name: "order");
-
-            migrationBuilder.CreateTable(
-                name: "IdempotentRequests",
-                schema: "order",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_IdempotentRequests", x => x.Id);
-                });
 
             migrationBuilder.CreateTable(
                 name: "InboxState",
@@ -213,10 +200,6 @@ namespace Order.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "IdempotentRequests",
-                schema: "order");
-
             migrationBuilder.DropTable(
                 name: "OrderDetails",
                 schema: "order");

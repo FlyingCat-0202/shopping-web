@@ -9,7 +9,6 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
 {
     public DbSet<OrderEntity> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
-    public DbSet<IdempotentRequest> IdempotentRequests { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,12 +43,6 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
                   .WithMany(o => o.Items)
                   .HasForeignKey(od => od.OrderId)
                   .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<IdempotentRequest>(entity =>
-        {
-            entity.ToTable("IdempotentRequests", "order");
-            entity.HasKey(r => r.Id);
         });
 
         // MassTransit Outbox
