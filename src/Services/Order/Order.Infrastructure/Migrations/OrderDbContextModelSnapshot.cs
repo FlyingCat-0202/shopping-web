@@ -219,6 +219,9 @@ namespace Order.Infrastructure.Migrations
                     b.HasIndex("CustomerId", "OrderDate")
                         .HasDatabaseName("IX_Orders_CustomerId_OrderDate");
 
+                    b.HasIndex("Status", "OrderDate")
+                        .HasDatabaseName("IX_Orders_Status_OrderDate");
+
                     b.ToTable("Orders", "order", t =>
                         {
                             t.HasCheckConstraint("CK_Orders_TotalAmount", "\"TotalAmount\" >= 0");

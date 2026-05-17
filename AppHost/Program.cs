@@ -21,6 +21,7 @@ var redis = builder.AddRedis("redis");
 var orderDb = postgres.AddDatabase("order-db");
 var productDb = postgres.AddDatabase("product-db");
 var identityDb = postgres.AddDatabase("identity-db");
+var paymentDb = postgres.AddDatabase("payment-db");
 
 // ── Services ──────────────────────────────────────────────────────────────────
 builder.AddProject<Order_API>("order-api")
@@ -52,5 +53,11 @@ builder.AddProject<Identity_API>("identity-api")
     .WaitFor(identityDb)
     .WaitFor(rabbitmq)
     .WaitFor(redis);
+
+builder.AddProject<Payment_API>("payment-api")
+    .WithReference(paymentDb)
+    .WithReference(rabbitmq)
+    .WaitFor(paymentDb)
+    .WaitFor(rabbitmq);
 
 builder.Build().Run();

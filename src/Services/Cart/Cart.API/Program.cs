@@ -5,17 +5,13 @@ using Cart.API.Validators;
 using EventBus.Infrastructure;
 using FluentValidation;
 using MassTransit;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using ServiceDefault;
 using StackExchange.Redis;
-using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddProblemDetails();
-builder.Services.AddHealthChecks();
-builder.Services.AddHttpLogging();
+builder.AddApiServiceDefaults();
 
 builder.Services.AddValidatorsFromAssemblyContaining<CartItemValidator>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
@@ -45,30 +41,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
-{
-    var jwtSection = builder.Configuration.GetSection("Jwt");
-    var key = jwtSection["Key"];
-
-    if (string.IsNullOrWhiteSpace(key))
-    {
-        if (!builder.Environment.IsDevelopment())
-            throw new InvalidOperationException("Jwt:Key not configured");
-
-        key = "development-only-cart-service-signing-key-please-use-user-secrets";
-    }
-
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSection["Issuer"],
-        ValidAudience = jwtSection["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
-    };
-});
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
 builder.Services.AddMassTransit(x =>
@@ -97,8 +70,7 @@ builder.Services.AddRedisIdempotency(redisConnectionString);
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
-app.UseHttpLogging();
+app.UseApiServiceDefaults();
 
 if (app.Environment.IsDevelopment())
 {

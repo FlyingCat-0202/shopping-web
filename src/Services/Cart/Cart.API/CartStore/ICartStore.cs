@@ -2,7 +2,7 @@ namespace Cart.API.CartStore;
 
 public interface ICartStore
 {
-    Task<List<CartStoreItem>> GetItemsAsync(Guid customerId);
+    Task<List<CartStoreItem>> GetItemsAsync(Guid customerId); 
     Task<bool> ItemExistsAsync(Guid customerId, Guid productId);
     Task<int> GetQuantityAsync(Guid customerId, Guid productId);
     Task UpsertItemAsync(Guid customerId, Guid productId, int quantity);

@@ -3,6 +3,7 @@ namespace Order.Domain.Enums;
 public enum OrderStatus
 {
     Pending,
+    PaymentPending,
     Processing,
     Shipped,
     Delivered,

@@ -1,13 +1,15 @@
 using EventBus.Extensions;
 using EventBus.Infrastructure;
+using FluentValidation;
 using MassTransit;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Product.API.Endpoints;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
+using Product.API.Validators;
 using Product.Infrastructure.Data;
+using ServiceDefault;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,9 +32,8 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 });
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
-builder.Services.AddProblemDetails();
-builder.Services.AddHealthChecks();
-builder.Services.AddHttpLogging();
+builder.AddApiServiceDefaults();
+builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -53,31 +54,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── JWT Auth ──────────────────────────────────────────────────────────────────
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
-{
-    var jwtSection = builder.Configuration.GetSection("Jwt");
-    var key = jwtSection["Key"];
-
-    if (string.IsNullOrWhiteSpace(key))
-    {
-        if (!builder.Environment.IsDevelopment())
-            throw new InvalidOperationException("Jwt:Key not configured");
-
-        key = "development-only-product-service-signing-key-please-use-user-secrets";
-    }
-
-    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSection["Issuer"],
-        ValidAudience = jwtSection["Audience"],
-        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-            System.Text.Encoding.UTF8.GetBytes(key))
-    };
-});
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
 // ── MassTransit + RabbitMQ ────────────────────────────────────────────────────
@@ -152,8 +129,7 @@ var app = builder.Build();
 await app.MigrateDatabaseAsync<ProductDbContext>();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.UseExceptionHandler();
-app.UseHttpLogging();
+app.UseApiServiceDefaults();
 
 if (app.Environment.IsDevelopment())
 {

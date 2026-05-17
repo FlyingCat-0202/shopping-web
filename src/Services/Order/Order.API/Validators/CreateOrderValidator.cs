@@ -23,7 +23,7 @@ public class CreateOrderValidator : AbstractValidator<CreateOrderRequest>
         RuleFor(x => x.PaymentMethod)
             .NotEmpty().WithMessage("Phương thức thanh toán không được để trống.")
             .Must(pm => Enum.TryParse<PaymentMethodType>(pm, true, out _))
-            .WithMessage("Phương thức thanh toán không hợp lệ. Chấp nhận: COD, OnlinePayment.");
+            .WithMessage("Phương thức thanh toán không hợp lệ. Chấp nhận: COD, CreditCard, PayPal.");
 
         RuleFor(x => x.Items)
             .NotEmpty().WithMessage("Danh sách sản phẩm không được rỗng.");

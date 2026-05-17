@@ -9,6 +9,7 @@ public class Product
     public required int StockQuantity { get; set; }
     public bool IsActive { get; set; } = true;
     public string? Description { get; set; }
+    public string? ImageUrl { get; set; }
     public int CategoryId { get; set; }
     public Category Category { get; set; } = null!;
 }

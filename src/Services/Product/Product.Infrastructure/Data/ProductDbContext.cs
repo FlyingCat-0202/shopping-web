@@ -37,6 +37,9 @@ public class ProductDbContext(DbContextOptions<ProductDbContext> options) : DbCo
             entity.Property(p => p.Price)
                   .HasColumnType("decimal(18,2)");
 
+            entity.Property(p => p.ImageUrl)
+                  .HasMaxLength(1000);
+
             entity.Property(p => p.StockQuantity)
                   .IsConcurrencyToken();
 

@@ -23,6 +23,8 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
             entity.ToTable(t => t.HasCheckConstraint("CK_Orders_TotalAmount", "\"TotalAmount\" >= 0"));
             entity.HasIndex(o => new { o.CustomerId, o.OrderDate })
                   .HasDatabaseName("IX_Orders_CustomerId_OrderDate");
+            entity.HasIndex(o => new { o.Status, o.OrderDate })
+                  .HasDatabaseName("IX_Orders_Status_OrderDate");
             entity.OwnsOne(o => o.DeliveryDetails, a =>
             {
                 a.Property(p => p.ReceiverName).HasColumnName("ReceiverName");

@@ -4,20 +4,20 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Order.Infrastructure.Migrations
+namespace Payment.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class OrderDbContextInitial : Migration
+    public partial class PaymentDbContextInitial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.EnsureSchema(
-                name: "order");
+                name: "payment");
 
             migrationBuilder.CreateTable(
                 name: "InboxState",
-                schema: "order",
+                schema: "payment",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
@@ -40,29 +40,8 @@ namespace Order.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Orders",
-                schema: "order",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrderDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    PaymentMethod = table.Column<string>(type: "text", nullable: false),
-                    Status = table.Column<string>(type: "text", nullable: false),
-                    TotalAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    ReceiverName = table.Column<string>(type: "text", nullable: false),
-                    PhoneNumber = table.Column<string>(type: "text", nullable: false),
-                    ShippingAddress = table.Column<string>(type: "text", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Orders", x => x.Id);
-                    table.CheckConstraint("CK_Orders_TotalAmount", "\"TotalAmount\" >= 0");
-                });
-
-            migrationBuilder.CreateTable(
                 name: "OutboxState",
-                schema: "order",
+                schema: "payment",
                 columns: table => new
                 {
                     OutboxId = table.Column<Guid>(type: "uuid", nullable: false),
@@ -78,32 +57,30 @@ namespace Order.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "OrderDetails",
-                schema: "order",
+                name: "Payments",
+                schema: "payment",
                 columns: table => new
                 {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
                     OrderId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ProductId = table.Column<Guid>(type: "uuid", nullable: false),
-                    UnitPrice = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    Quantity = table.Column<int>(type: "integer", nullable: false)
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    PaymentMethod = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    Status = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    ProviderTransactionId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    FailureReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CompletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_OrderDetails", x => new { x.OrderId, x.ProductId });
-                    table.CheckConstraint("CK_OrderDetails_Quantity", "\"Quantity\" > 0");
-                    table.CheckConstraint("CK_OrderDetails_UnitPrice", "\"UnitPrice\" >= 0");
-                    table.ForeignKey(
-                        name: "FK_OrderDetails_Orders_OrderId",
-                        column: x => x.OrderId,
-                        principalSchema: "order",
-                        principalTable: "Orders",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                    table.PrimaryKey("PK_Payments", x => x.Id);
+                    table.CheckConstraint("CK_Payments_Amount", "\"Amount\" > 0");
                 });
 
             migrationBuilder.CreateTable(
                 name: "OutboxMessage",
-                schema: "order",
+                schema: "payment",
                 columns: table => new
                 {
                     SequenceNumber = table.Column<long>(type: "bigint", nullable: false)
@@ -135,90 +112,93 @@ namespace Order.Infrastructure.Migrations
                     table.ForeignKey(
                         name: "FK_OutboxMessage_InboxState_InboxMessageId_InboxConsumerId",
                         columns: x => new { x.InboxMessageId, x.InboxConsumerId },
-                        principalSchema: "order",
+                        principalSchema: "payment",
                         principalTable: "InboxState",
                         principalColumns: new[] { "MessageId", "ConsumerId" });
                     table.ForeignKey(
                         name: "FK_OutboxMessage_OutboxState_OutboxId",
                         column: x => x.OutboxId,
-                        principalSchema: "order",
+                        principalSchema: "payment",
                         principalTable: "OutboxState",
                         principalColumn: "OutboxId");
                 });
 
             migrationBuilder.CreateIndex(
                 name: "IX_InboxState_Delivered",
-                schema: "order",
+                schema: "payment",
                 table: "InboxState",
                 column: "Delivered");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OrderDetails_ProductId",
-                schema: "order",
-                table: "OrderDetails",
-                column: "ProductId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Orders_CustomerId_OrderDate",
-                schema: "order",
-                table: "Orders",
-                columns: new[] { "CustomerId", "OrderDate" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_OutboxMessage_EnqueueTime",
-                schema: "order",
+                schema: "payment",
                 table: "OutboxMessage",
                 column: "EnqueueTime");
 
             migrationBuilder.CreateIndex(
                 name: "IX_OutboxMessage_ExpirationTime",
-                schema: "order",
+                schema: "payment",
                 table: "OutboxMessage",
                 column: "ExpirationTime");
 
             migrationBuilder.CreateIndex(
                 name: "IX_OutboxMessage_InboxMessageId_InboxConsumerId_SequenceNumber",
-                schema: "order",
+                schema: "payment",
                 table: "OutboxMessage",
                 columns: new[] { "InboxMessageId", "InboxConsumerId", "SequenceNumber" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_OutboxMessage_OutboxId_SequenceNumber",
-                schema: "order",
+                schema: "payment",
                 table: "OutboxMessage",
                 columns: new[] { "OutboxId", "SequenceNumber" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_OutboxState_Created",
-                schema: "order",
+                schema: "payment",
                 table: "OutboxState",
                 column: "Created");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Payments_CustomerId_CreatedAt",
+                schema: "payment",
+                table: "Payments",
+                columns: new[] { "CustomerId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Payments_OrderId",
+                schema: "payment",
+                table: "Payments",
+                column: "OrderId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Payments_Status_CreatedAt",
+                schema: "payment",
+                table: "Payments",
+                columns: new[] { "Status", "CreatedAt" });
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "OrderDetails",
-                schema: "order");
-
-            migrationBuilder.DropTable(
                 name: "OutboxMessage",
-                schema: "order");
+                schema: "payment");
 
             migrationBuilder.DropTable(
-                name: "Orders",
-                schema: "order");
+                name: "Payments",
+                schema: "payment");
 
             migrationBuilder.DropTable(
                 name: "InboxState",
-                schema: "order");
+                schema: "payment");
 
             migrationBuilder.DropTable(
                 name: "OutboxState",
-                schema: "order");
+                schema: "payment");
         }
     }
 }

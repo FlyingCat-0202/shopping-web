@@ -1,12 +1,16 @@
 using EventBus.Extensions;
 using EventBus.Infrastructure;
 using Identity.API.Endpoints;
+using Identity.API.Seed;
+using Identity.API.Validators;
 using Identity.Domain.Models;
 using Identity.Infrastructure.Data;
+using FluentValidation;
 using MassTransit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using ServiceDefault;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,9 +40,8 @@ builder.Services.AddIdentity<Customer, IdentityRole<Guid>>(options =>
 .AddDefaultTokenProviders();
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
-builder.Services.AddProblemDetails();
-builder.Services.AddHealthChecks();
-builder.Services.AddHttpLogging();
+builder.AddApiServiceDefaults();
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -61,30 +64,8 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // ── JWT Configuration ────────────────────────────────────────────────────────
-// Lưu ý: Identity API chủ yếu phát hành Token, nhưng vẫn cần Auth để bảo vệ các Endpoint Profile/User.
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    var jwtSection = builder.Configuration.GetSection("Jwt");
-    var key = jwtSection["Key"] ?? "development-only-identity-service-signing-key-123456";
-
-    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSection["Issuer"],
-        ValidAudience = jwtSection["Audience"],
-        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-            System.Text.Encoding.UTF8.GetBytes(key))
-    };
-});
-
+// Identity API chủ yếu phát hành token, nhưng vẫn cần auth để bảo vệ profile/user endpoints.
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
 // ── MassTransit + RabbitMQ (Outbox Pattern) ──────────────────────────────────
@@ -111,10 +92,10 @@ builder.Services.AddMassTransit(x =>
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync<IdentityAppDbContext>();
+await IdentitySeedData.SeedAdminAsync(app);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.UseExceptionHandler();
-app.UseHttpLogging();
+app.UseApiServiceDefaults();
 
 if (app.Environment.IsDevelopment())
 {

@@ -35,6 +35,7 @@ public static class OrderEndpoints
 
         // Admin endpoints
         var admin = group.MapGroup("/").RequireAuthorization(EndpointHelpers.AdminOnly);
+        admin.MapGet("/admin", GetAllOrders).WithName("GetAdminOrders");
         admin.MapPut("/{id:guid}/return-approve", ApproveReturn);
         admin.MapPut("/{id:guid}/return-reject", RejectReturn);
         admin.MapPut("/{id:guid}/ship", ShipOrder);
@@ -118,8 +119,9 @@ public static class OrderEndpoints
             o.Id, o.OrderDate, o.TotalAmount,
             o.Status.ToString(),
             OrderEntity.ComputePaymentState(o.Status, o.PaymentMethod).ToString(),
-            o.Status == OrderStatus.Processing,
-            o.Status != OrderStatus.Pending && o.Status != OrderStatus.Cancelled,
+            o.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            o.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
+                or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
             o.Status == OrderStatus.Delivered)).ToList();
 
         return Results.Ok(new PagedResult<OrderSummaryResponse>(orders, totalCount, pageIndex, pageSize));
@@ -135,19 +137,35 @@ public static class OrderEndpoints
             return Results.Unauthorized();
 
         var order = await db.Orders.AsNoTracking()
-            .FirstOrDefaultAsync(o => o.Id == id && o.CustomerId == customerId, cancellationToken);
+            .Where(o => o.Id == id && o.CustomerId == customerId)
+            .Select(o => new
+            {
+                o.Id,
+                o.OrderDate,
+                o.TotalAmount,
+                o.DeliveryDetails.ReceiverName,
+                o.DeliveryDetails.PhoneNumber,
+                o.DeliveryDetails.ShippingAddress,
+                o.PaymentMethod,
+                o.Status,
+                Items = o.Items
+                    .Select(od => new OrderItemResponse(od.ProductId, od.Quantity, od.UnitPrice))
+                    .ToList()
+            })
+            .FirstOrDefaultAsync(cancellationToken);
         if (order == null) return Results.NotFound();
-
-        var items = await db.OrderDetails.AsNoTracking()
-            .Where(od => od.OrderId == order.Id)
-            .Select(od => new OrderItemResponse(od.ProductId, od.Quantity, od.UnitPrice))
-            .ToListAsync(cancellationToken);
 
         return Results.Ok(new OrderDetailResponse(
             order.Id, order.OrderDate, order.TotalAmount,
-            order.DeliveryDetails.ReceiverName, order.DeliveryDetails.PhoneNumber, order.DeliveryDetails.ShippingAddress,
-            order.PaymentMethod.ToString(), order.Status.ToString(), order.PaymentState.ToString(),
-            order.CanCancel(), order.CanTrack(), order.CanReturn(), items));
+            order.ReceiverName, order.PhoneNumber, order.ShippingAddress,
+            order.PaymentMethod.ToString(),
+            order.Status.ToString(),
+            OrderEntity.ComputePaymentState(order.Status, order.PaymentMethod).ToString(),
+            order.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            order.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
+                or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
+            order.Status == OrderStatus.Delivered,
+            order.Items));
     }
 
     private static async Task<IResult> CancelOrder(
@@ -196,6 +214,50 @@ public static class OrderEndpoints
     }
 
     // ── Admin Handlers ────────────────────────────────────────────────────────
+
+    private static async Task<IResult> GetAllOrders(
+        OrderDbContext db,
+        CancellationToken cancellationToken,
+        int pageIndex = 0,
+        int pageSize = 10,
+        string? status = null)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        pageIndex = Math.Max(pageIndex, 0);
+
+        var query = db.Orders.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<OrderStatus>(status, true, out var orderStatus))
+                return Results.BadRequest(new { message = "Trạng thái đơn hàng không hợp lệ." });
+
+            query = query.Where(o => o.Status == orderStatus);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var ordersDb = await query
+            .OrderByDescending(o => o.OrderDate)
+            .Skip(pageIndex * pageSize)
+            .Take(pageSize)
+            .Select(o => new { o.Id, o.CustomerId, o.OrderDate, o.TotalAmount, o.Status, o.PaymentMethod })
+            .ToListAsync(cancellationToken);
+
+        var orders = ordersDb.Select(o => new AdminOrderSummaryResponse(
+            o.Id,
+            o.CustomerId,
+            o.OrderDate,
+            o.TotalAmount,
+            o.Status.ToString(),
+            OrderEntity.ComputePaymentState(o.Status, o.PaymentMethod).ToString(),
+            o.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            o.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
+                or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
+            o.Status == OrderStatus.Delivered)).ToList();
+
+        return Results.Ok(new PagedResult<AdminOrderSummaryResponse>(orders, totalCount, pageIndex, pageSize));
+    }
 
     private static async Task<IResult> ApproveReturn(
         Guid id,

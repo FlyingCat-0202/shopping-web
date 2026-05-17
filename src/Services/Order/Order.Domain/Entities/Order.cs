@@ -43,10 +43,10 @@ public class Order
             _items.Add(new OrderDetail(Id, productId, unitPrice, quantity));
     }
 
-    public void ConfirmWithPrices(Dictionary<Guid, decimal> prices) // pending → processing
+    public void MarkStockReserved(Dictionary<Guid, decimal> prices)
     {
         if (Status != OrderStatus.Pending)
-            throw new InvalidOperationException($"Không thể xác nhận đơn hàng ở trạng thái {Status}.");
+            throw new InvalidOperationException($"Không thể giữ kho cho đơn hàng ở trạng thái {Status}.");
 
         decimal total = 0;
         foreach (var item in _items)
@@ -56,12 +56,30 @@ public class Order
             total += item.UnitPrice * item.Quantity;
         }
         TotalAmount = total;
+        Status = IsOnlinePayment() ? OrderStatus.PaymentPending : OrderStatus.Processing;
+    }
+
+    public void ConfirmPayment()
+    {
+        if (Status == OrderStatus.Processing)
+            return;
+
+        if (Status != OrderStatus.PaymentPending)
+            throw new InvalidOperationException($"Không thể xác nhận thanh toán ở trạng thái {Status}.");
+
         Status = OrderStatus.Processing;
     }
 
     public void Cancel()
     {
         if (!CanCancel()) throw new InvalidOperationException($"Không thể hủy đơn hàng ở trạng thái {Status}.");
+        Status = OrderStatus.Cancelled;
+    }
+
+    public void CancelDueToPaymentFailure()
+    {
+        if (Status != OrderStatus.PaymentPending)
+            throw new InvalidOperationException($"Không thể hủy thanh toán thất bại ở trạng thái {Status}.");
         Status = OrderStatus.Cancelled;
     }
 
@@ -103,7 +121,7 @@ public class Order
     }
 
     // ── Query Helpers ─────────────────────────────────────────────────────────
-    public bool CanCancel() => Status == OrderStatus.Processing;
+    public bool CanCancel() => Status is OrderStatus.PaymentPending or OrderStatus.Processing;
     public bool CanShip() => Status == OrderStatus.Processing;
     public bool CanDeliver() => Status == OrderStatus.Shipped;
     public bool CanRequestReturn() => Status == OrderStatus.Delivered;
@@ -113,6 +131,7 @@ public class Order
         or OrderStatus.Delivered or OrderStatus.ReturnRequested
         or OrderStatus.Returned or OrderStatus.ReturnRejected;
     public bool CanReturn() => Status == OrderStatus.Delivered;
+    public bool IsOnlinePayment() => PaymentMethod != PaymentMethodType.COD;
 
     // ── Computed Properties ───────────────────────────────────────────────────
     [NotMapped]
@@ -128,6 +147,7 @@ public class Order
             }
             : status switch
             {
+                OrderStatus.Pending or OrderStatus.PaymentPending => PaymentStatus.Unpaid,
                 OrderStatus.Cancelled or OrderStatus.Returned => PaymentStatus.Refunded,
                 _ => PaymentStatus.Paid
             };
