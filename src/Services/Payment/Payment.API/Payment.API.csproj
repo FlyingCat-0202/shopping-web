@@ -9,7 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Templates\MeiMeiCheckout.html" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Templates\*.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

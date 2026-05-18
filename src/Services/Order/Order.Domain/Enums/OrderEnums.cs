@@ -17,6 +17,7 @@ public enum PaymentMethodType
 {
     COD,
     MeiMei,
+    MeilyMeily,
     CreditCard,
     PayPal
 }

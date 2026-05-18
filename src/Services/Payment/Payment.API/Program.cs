@@ -6,6 +6,7 @@ using Microsoft.OpenApi;
 using Payment.API.BackgroundJobs;
 using Payment.API.Endpoints;
 using Payment.API.IntegrationEvents.Consumers;
+using Payment.API.PaymentProviders;
 using Payment.Infrastructure.Data;
 using ServiceDefault;
 
@@ -31,6 +32,9 @@ builder.Services.AddDbContext<PaymentDbContext>(options =>
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.AddApiServiceDefaults();
 builder.Services.AddHostedService<PaymentTimeoutService>();
+builder.Services.AddSingleton<IPaymentProvider, MeiMeiPaymentProvider>();
+builder.Services.AddSingleton<IPaymentProvider, MeilyMeilyPaymentProvider>();
+builder.Services.AddSingleton<PaymentProviderCatalog>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();

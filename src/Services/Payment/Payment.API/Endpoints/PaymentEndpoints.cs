@@ -3,11 +3,10 @@ using EventBus.Extensions;
 using EventBus.Infrastructure;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Payment.API.PaymentProviders;
 using Payment.Domain.Entities;
 using Payment.Domain.Enums;
 using Payment.Infrastructure.Data;
-using System.Globalization;
-using System.Net;
 using System.Security.Cryptography;
 using System.Security.Claims;
 using System.Text;
@@ -33,13 +32,16 @@ public static class PaymentEndpoints
         group.MapGet("/order/{orderId:guid}", GetPaymentByOrderId)
             .WithName("GetPaymentByOrderId");
 
+        group.MapGet("/providers", GetPaymentProviders)
+            .WithName("GetPaymentProviders");
+
         group.MapPost("/{id:guid}/confirm", ConfirmPayment)
             .AddEndpointFilter<IdempotencyFilter>()
             .WithName("ConfirmPayment");
 
-        group.MapPost("/{id:guid}/meimei/checkout", CreateMeiMeiCheckout)
+        group.MapPost("/{id:guid}/providers/{provider}/checkout", CreateProviderCheckout)
             .AddEndpointFilter<IdempotencyFilter>()
-            .WithName("CreateMeiMeiCheckout");
+            .WithName("CreateProviderCheckout");
 
         var admin = group.MapGroup("/admin")
             .RequireAuthorization(EndpointHelpers.AdminOnly);
@@ -59,16 +61,18 @@ public static class PaymentEndpoints
             .AllowAnonymous()
             .WithName("ConfirmPaymentWebhook");
 
-        app.MapGet("/api/payment/meimei/checkout/{id:guid}", ShowMeiMeiCheckout)
+        app.MapGet("/api/payment/providers/{provider}/checkout/{id:guid}", ShowProviderCheckout)
             .WithTags("Payments")
             .AllowAnonymous()
-            .WithName("ShowMeiMeiCheckout");
+            .WithName("ShowProviderCheckout");
 
-        app.MapPost("/api/payment/meimei/checkout/{id:guid}/complete", CompleteMeiMeiCheckout)
+        app.MapPost("/api/payment/providers/{provider}/checkout/{id:guid}/complete", CompleteProviderCheckout)
             .WithTags("Payments")
             .AllowAnonymous()
-            .WithName("CompleteMeiMeiCheckout");
+            .WithName("CompleteProviderCheckout");
     }
+
+
 
     private static async Task<IResult> GetPaymentByOrderId(
         Guid orderId,
@@ -95,6 +99,9 @@ public static class PaymentEndpoints
 
         return payment is null ? Results.NotFound() : Results.Ok(payment);
     }
+
+    private static IResult GetPaymentProviders(PaymentProviderCatalog providers)
+        => Results.Ok(providers.GetAll());
 
     private static async Task<IResult> ConfirmPayment(
         Guid id,
@@ -132,20 +139,21 @@ public static class PaymentEndpoints
         return Results.Ok(ToPaymentResponse(payment));
     }
 
-    private static async Task<IResult> CreateMeiMeiCheckout(
+    private static async Task<IResult> CreateProviderCheckout(
         Guid id,
+        string provider,
         ClaimsPrincipal user,
         HttpRequest request,
         PaymentDbContext db,
-        IConfiguration configuration,
+        PaymentProviderCatalog providers,
         CancellationToken cancellationToken)
     {
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
 
-        var secret = configuration["Payment:WebhookSecret"];
-        if (string.IsNullOrWhiteSpace(secret))
-            return Results.Problem("Payment webhook secret is not configured.");
+        var paymentProvider = providers.FindByRoute(provider);
+        if (paymentProvider is null)
+            return Results.BadRequest(new { message = $"Provider {provider} không được hỗ trợ." });
 
         var payment = await db.Payments.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
@@ -159,30 +167,29 @@ public static class PaymentEndpoints
         if (payment.Status != PaymentStatus.Pending)
             return Results.Conflict(new { message = $"Payment đang ở trạng thái {payment.Status}." });
 
-        var token = ComputeMeiMeiToken(payment.Id, secret);
-        var checkoutUrl = $"{request.Scheme}://{request.Host}/api/payment/meimei/checkout/{payment.Id}?token={Uri.EscapeDataString(token)}";
+        if (!paymentProvider.SupportsPaymentMethod(payment.PaymentMethod))
+        {
+            return Results.BadRequest(new
+            {
+                message = $"Payment method {payment.PaymentMethod} không thể thanh toán bằng {paymentProvider.Name}."
+            });
+        }
 
-        return Results.Ok(new MeiMeiCheckoutResponse(
-            "MeiMei",
-            payment.Id,
-            checkoutUrl,
-            GetMeiMeiExpiresAt(payment)));
+        var checkout = await paymentProvider.CreateCheckoutAsync(payment, request, cancellationToken);
+        return Results.Ok(checkout);
     }
 
-    private static async Task<IResult> ShowMeiMeiCheckout(
+    private static async Task<IResult> ShowProviderCheckout(
         Guid id,
+        string provider,
         string? token,
         PaymentDbContext db,
-        IConfiguration configuration,
-        IWebHostEnvironment environment,
+        PaymentProviderCatalog providers,
         CancellationToken cancellationToken)
     {
-        var secret = configuration["Payment:WebhookSecret"];
-        if (string.IsNullOrWhiteSpace(secret))
-            return Results.Problem("Payment webhook secret is not configured.");
-
-        if (!IsValidMeiMeiToken(id, token, secret))
-            return Results.Unauthorized();
+        var paymentProvider = providers.FindByRoute(provider);
+        if (paymentProvider is null)
+            return Results.NotFound();
 
         var payment = await db.Payments.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
@@ -190,41 +197,25 @@ public static class PaymentEndpoints
         if (payment is null)
             return Results.NotFound();
 
-        var isPending = payment.Status == PaymentStatus.Pending && !IsMeiMeiExpired(payment);
-        var amount = payment.Amount.ToString("0.00", CultureInfo.InvariantCulture);
-        var status = payment.Status.ToString();
-        var disabledAttribute = isPending ? string.Empty : "disabled";
-        var message = isPending
-            ? "Choose the result you want MeiMei to send back to the Payment service."
-            : $"This payment is already {status}.";
+        var page = await paymentProvider.CreateCheckoutPageAsync(payment, token, cancellationToken);
+        if (!page.IsAuthorized)
+            return Results.Unauthorized();
 
-        var html = await RenderMeiMeiCheckoutTemplate(
-            payment,
-            token!,
-            amount,
-            status,
-            message,
-            disabledAttribute,
-            environment,
-            cancellationToken);
-
-        return Results.Content(html, "text/html; charset=utf-8");
+        return Results.Content(page.Html!, "text/html; charset=utf-8");
     }
 
-    private static async Task<IResult> CompleteMeiMeiCheckout(
+    private static async Task<IResult> CompleteProviderCheckout(
         Guid id,
-        MeiMeiCompleteRequest request,
+        string provider,
+        PaymentProviderCompleteRequest request,
         PaymentDbContext db,
         IPublishEndpoint publishEndpoint,
-        IConfiguration configuration,
+        PaymentProviderCatalog providers,
         CancellationToken cancellationToken)
     {
-        var secret = configuration["Payment:WebhookSecret"];
-        if (string.IsNullOrWhiteSpace(secret))
-            return Results.Problem("Payment webhook secret is not configured.");
-
-        if (!IsValidMeiMeiToken(id, request.Token, secret))
-            return Results.Unauthorized();
+        var paymentProvider = providers.FindByRoute(provider);
+        if (paymentProvider is null)
+            return Results.NotFound();
 
         var payment = await db.Payments
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
@@ -238,22 +229,26 @@ public static class PaymentEndpoints
         if (payment.Status is PaymentStatus.Failed or PaymentStatus.Expired)
             return Results.Ok(ToPaymentResponse(payment));
 
-        if (IsMeiMeiExpired(payment))
+        var providerResult = paymentProvider.CompleteCheckout(payment, request);
+        if (!providerResult.IsAuthorized)
+            return Results.Unauthorized();
+
+        if (providerResult.IsExpired)
         {
-            payment.MarkExpired("MeiMei checkout expired.");
+            payment.MarkExpired(providerResult.FailureReason);
             await PublishFailed(publishEndpoint, payment, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
-            return Results.Conflict(new { message = "MeiMei checkout đã hết hạn." });
+            return Results.Conflict(new { message = $"{paymentProvider.Name} checkout đã hết hạn." });
         }
 
-        if (request.Success)
+        if (providerResult.Success)
         {
-            payment.MarkSucceeded($"meimei-{payment.Id:N}");
+            payment.MarkSucceeded(providerResult.ProviderTransactionId ?? $"{paymentProvider.RouteName}-{payment.Id:N}");
             await PublishSucceeded(publishEndpoint, payment, cancellationToken);
         }
         else
         {
-            payment.MarkFailed("MeiMei checkout failed.");
+            payment.MarkFailed(providerResult.FailureReason);
             await PublishFailed(publishEndpoint, payment, cancellationToken);
         }
 
@@ -484,30 +479,6 @@ public static class PaymentEndpoints
             Reason = payment.FailureReason ?? "Thanh toán thất bại."
         }, ctx => ctx.SetRoutingKey(PaymentFailedRoutingKey), cancellationToken);
 
-    private static async Task<string> RenderMeiMeiCheckoutTemplate(
-        PaymentTransaction payment,
-        string token,
-        string amount,
-        string status,
-        string message,
-        string disabledAttribute,
-        IWebHostEnvironment environment,
-        CancellationToken cancellationToken)
-    {
-        var templatePath = Path.Combine(environment.ContentRootPath, "Templates", "MeiMeiCheckout.html");
-        var template = await File.ReadAllTextAsync(templatePath, cancellationToken);
-
-        return template
-            .Replace("{{MESSAGE}}", WebUtility.HtmlEncode(message))
-            .Replace("{{AMOUNT}}", WebUtility.HtmlEncode(amount))
-            .Replace("{{PAYMENT_ID}}", WebUtility.HtmlEncode(payment.Id.ToString()))
-            .Replace("{{ORDER_ID}}", WebUtility.HtmlEncode(payment.OrderId.ToString()))
-            .Replace("{{STATUS}}", WebUtility.HtmlEncode(status))
-            .Replace("{{DISABLED_ATTRIBUTE}}", disabledAttribute)
-            .Replace("{{TOKEN_JSON}}", JsonSerializer.Serialize(token))
-            .Replace("{{PAYMENT_ID_JSON}}", JsonSerializer.Serialize(payment.Id.ToString()));
-    }
-
     private static bool IsValidWebhookSignature(HttpRequest request, string payload, string secret)
     {
         var timestampValue = request.Headers[WebhookTimestampHeader].FirstOrDefault();
@@ -540,30 +511,6 @@ public static class PaymentEndpoints
     private static string ComputeSignature(string timestamp, string payload, string secret)
         => ComputeHmac($"{timestamp}.{payload}", secret);
 
-    private static string ComputeMeiMeiToken(Guid paymentId, string secret)
-        => ComputeHmac($"meimei:{paymentId:N}", secret);
-
-    private static bool IsValidMeiMeiToken(Guid paymentId, string? token, string secret)
-    {
-        if (string.IsNullOrWhiteSpace(token))
-            return false;
-
-        var expectedToken = ComputeMeiMeiToken(paymentId, secret);
-
-        if (token.Length != expectedToken.Length)
-            return false;
-
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(token),
-            Encoding.UTF8.GetBytes(expectedToken));
-    }
-
-    private static DateTime GetMeiMeiExpiresAt(PaymentTransaction payment)
-        => payment.CreatedAt.AddMinutes(10);
-
-    private static bool IsMeiMeiExpired(PaymentTransaction payment)
-        => DateTime.UtcNow > GetMeiMeiExpiresAt(payment);
-
     private static string ComputeHmac(string value, string secret)
     {
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
@@ -582,16 +529,6 @@ public record PaymentMockWebhookRequest(
     bool Success,
     string? ProviderTransactionId,
     string? Reason);
-
-public record MeiMeiCheckoutResponse(
-    string Provider,
-    Guid PaymentId,
-    string CheckoutUrl,
-    DateTime ExpiresAt);
-
-public record MeiMeiCompleteRequest(
-    bool Success,
-    string Token);
 
 public record PaymentPagedResult<T>(
     IReadOnlyList<T> Items,
