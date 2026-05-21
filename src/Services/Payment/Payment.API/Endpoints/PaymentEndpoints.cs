@@ -35,9 +35,9 @@ public static class PaymentEndpoints
         group.MapGet("/providers", GetPaymentProviders)
             .WithName("GetPaymentProviders");
 
-        group.MapPost("/{id:guid}/confirm", ConfirmPayment)
-            .AddEndpointFilter<IdempotencyFilter>()
-            .WithName("ConfirmPayment");
+        // group.MapPost("/{id:guid}/confirm", ConfirmPayment)
+        //     .AddEndpointFilter<IdempotencyFilter>()
+        //     .WithName("ConfirmPayment");
 
         group.MapPost("/{id:guid}/providers/{provider}/checkout", CreateProviderCheckout)
             .AddEndpointFilter<IdempotencyFilter>()
@@ -103,41 +103,41 @@ public static class PaymentEndpoints
     private static IResult GetPaymentProviders(PaymentProviderCatalog providers)
         => Results.Ok(providers.GetAll());
 
-    private static async Task<IResult> ConfirmPayment(
-        Guid id,
-        ClaimsPrincipal user,
-        PaymentDbContext db,
-        IPublishEndpoint publishEndpoint,
-        CancellationToken cancellationToken)
-    {
-        if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
-            return Results.Unauthorized();
+    // private static async Task<IResult> ConfirmPayment(
+    //     Guid id,
+    //     ClaimsPrincipal user,
+    //     PaymentDbContext db,
+    //     IPublishEndpoint publishEndpoint,
+    //     CancellationToken cancellationToken)
+    // {
+    //     if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
+    //         return Results.Unauthorized();
 
-        var payment = await db.Payments
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+    //     var payment = await db.Payments
+    //         .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
-        if (payment is null)
-            return Results.NotFound();
+    //     if (payment is null)
+    //         return Results.NotFound();
 
-        if (payment.CustomerId != customerId)
-            return Results.Forbid();
+    //     if (payment.CustomerId != customerId)
+    //         return Results.Forbid();
 
-        if (payment.Status == PaymentStatus.Succeeded)
-        {
-            await PublishSucceeded(publishEndpoint, payment, cancellationToken);
-            await db.SaveChangesAsync(cancellationToken);
-            return Results.Ok(ToPaymentResponse(payment));
-        }
+    //     if (payment.Status == PaymentStatus.Succeeded)
+    //     {
+    //         await PublishSucceeded(publishEndpoint, payment, cancellationToken);
+    //         await db.SaveChangesAsync(cancellationToken);
+    //         return Results.Ok(ToPaymentResponse(payment));
+    //     }
 
-        if (payment.Status != PaymentStatus.Pending)
-            return Results.Conflict(new { message = $"Payment đang ở trạng thái {payment.Status}." });
+    //     if (payment.Status != PaymentStatus.Pending)
+    //         return Results.Conflict(new { message = $"Payment đang ở trạng thái {payment.Status}." });
 
-        payment.MarkSucceeded($"manual-{payment.Id:N}");
-        await PublishSucceeded(publishEndpoint, payment, cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
+    //     payment.MarkSucceeded($"manual-{payment.Id:N}");
+    //     await PublishSucceeded(publishEndpoint, payment, cancellationToken);
+    //     await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ToPaymentResponse(payment));
-    }
+    //     return Results.Ok(ToPaymentResponse(payment));
+    // }
 
     private static async Task<IResult> CreateProviderCheckout(
         Guid id,
@@ -148,9 +148,11 @@ public static class PaymentEndpoints
         PaymentProviderCatalog providers,
         CancellationToken cancellationToken)
     {
+        // ── Xác thực user và quyền truy cập ───────────────────────────────────────────────
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
 
+        // ── Tìm payment và provider ───────────────────────────────────────────────────────
         var paymentProvider = providers.FindByRoute(provider);
         if (paymentProvider is null)
             return Results.BadRequest(new { message = $"Provider {provider} không được hỗ trợ." });
@@ -164,6 +166,7 @@ public static class PaymentEndpoints
         if (payment.CustomerId != customerId)
             return Results.Forbid();
 
+        // ── Kiểm tra trạng thái payment ───────────────────────────────────────────────────────
         if (payment.Status != PaymentStatus.Pending)
             return Results.Conflict(new { message = $"Payment đang ở trạng thái {payment.Status}." });
 
