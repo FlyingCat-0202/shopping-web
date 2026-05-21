@@ -42,3 +42,9 @@ public record ProductUpdatedEvent(
     bool IsActive,
     string CategoryName
 );
+
+public record SearchProductRequest(
+    string Keyword,
+    int Page = 1,
+    int PageSize = 10
+);

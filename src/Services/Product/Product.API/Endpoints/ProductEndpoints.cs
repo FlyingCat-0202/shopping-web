@@ -1,3 +1,5 @@
+using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch.QueryDsl;
 using EventBus.Contracts;
 using EventBus.Extensions;
 using EventBus.Infrastructure;
@@ -5,6 +7,7 @@ using MassTransit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Product.API.Dtos;
+using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.Domain.Entities;
 using Product.Infrastructure.Data;
 
@@ -246,7 +249,65 @@ public static class ProductEndpoints
         .AddEndpointFilter<ValidationFilter<ProductRequest>>()
         .RequireAuthorization(EndpointHelpers.AdminOnly)
         .AddEndpointFilter<IdempotencyFilter>();
+
+        group.MapGet("/search", async (
+            [AsParameters] SearchProductRequest request,
+            ElasticsearchClient elasticClient, // Inject Client vào đây
+            CancellationToken cancellationToken) =>
+        {
+            // Tính toán vị trí bỏ qua (cho phân trang)
+            var from = (request.Page - 1) * request.PageSize;
+
+            // Gọi lệnh Search xuống Elasticsearch
+            var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s => s
+                .Indices("products")
+                .From(from)
+                .Size(request.PageSize)
+                .Query(q => q
+                    .Bool(b => b
+                        // 1. FILTER: Lọc bắt buộc (Chỉ lấy sản phẩm đang bán)
+                        .Filter(f => f
+                            .Term(t => t.Field(p => p.IsActive).Value(true))
+                        )
+                        // 2. MUST: Tìm kiếm Full-text
+                        .Must(m =>
+                        {
+                            if (string.IsNullOrWhiteSpace(request.Keyword))
+                            {
+                                // XÓA CHỮ RETURN: Gọi trực tiếp hàm để cấu hình
+                                m.MatchAll();
+                            }
+                            else
+                            {
+                                // XÓA CHỮ RETURN: Thêm khối else và gọi trực tiếp
+                                m.MultiMatch(mm => mm
+                                    .Query(request.Keyword)
+                                    .Fields(new[] { "name", "categoryName" })
+                                    .Fuzziness(new Fuzziness("AUTO"))
+                                );
+                            }
+                        })
+                    )
+                )
+            , cancellationToken);
+
+            if (!searchResponse.IsValidResponse)
+            {
+                // Có thể log lỗi ở đây
+                return Results.Problem("Lỗi hệ thống khi tìm kiếm dữ liệu.");
+            }
+
+            // Trả về kết quả cho Frontend
+            return Results.Ok(new
+            {
+                TotalItems = searchResponse.Total,
+                CurrentPage = request.Page,
+                Items = searchResponse.Documents // Đây chính là list ProductEsDocument
+            });
+        });
     }
+
+
 
     private static async Task SendMessage<T>(
         T msg,
