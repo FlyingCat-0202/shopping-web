@@ -23,40 +23,18 @@ public class OrderReturnedConsumer(ProductDbContext dbContext, ILogger<OrderRetu
                 return;
             }
 
-            var productIds = message.Items.Select(x => x.ProductId).ToList();
-            var products = await dbContext.Products
-                .Where(p => productIds.Contains(p.Id))
-                .ToListAsync(context.CancellationToken);
-
-            if (products.Count != productIds.Count)
-            {
-                var foundProductIds = products.Select(p => p.Id).ToList();
-                var missingProductIds = productIds.Except(foundProductIds).ToList();
-
-                logger.LogError("Không tìm thấy một số sản phẩm để hoàn kho cho Order {OrderId}. Các ProductId thiếu: {MissingIds}",
-                    message.OrderId, string.Join(", ", missingProductIds));
-            }
-
-            var productById = products.ToDictionary(p => p.Id);
-
-            foreach (var item in message.Items)
-            {
-                if (productById.TryGetValue(item.ProductId, out var p))
-                {
-                    p.StockQuantity += item.Quantity;
-                }
-                else
-                {
-                    logger.LogWarning("Bỏ qua hoàn kho cho sản phẩm {ProductId} của Order {OrderId} vì không tìm thấy trong DB.",
-                        item.ProductId, message.OrderId);
-                }
-            }
+            var releasedCount = await StockReservationReleaseHelper.ReleaseReservedStockAsync(
+                dbContext,
+                message.OrderId,
+                message.Items,
+                "Returned",
+                context.CancellationToken);
 
             await dbContext.SaveChangesAsync(context.CancellationToken);
 
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Hoàn kho thành công cho Order {OrderId}", message.OrderId);
+                logger.LogInformation("Hoàn kho {ReleasedCount} reservation cho Order {OrderId}", releasedCount, message.OrderId);
             }
         }
         catch (DbUpdateConcurrencyException)
