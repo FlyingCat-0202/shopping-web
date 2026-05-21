@@ -8,6 +8,6 @@ public class Customer : IdentityUser<Guid>
     public string? Address { get; set; }
 
     // Refresh Token fields
-    public string? RefreshToken { get; set; }
+    public string? RefreshTokenHash { get; set; }
     public DateTime? RefreshTokenExpiryTime { get; set; }
 }

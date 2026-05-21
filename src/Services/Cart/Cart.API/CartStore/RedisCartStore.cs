@@ -37,24 +37,32 @@ public class RedisCartStore(IConnectionMultiplexer redis) : ICartStore
 
     public async Task<bool> RemoveItemAsync(Guid customerId, Guid productId)
     {
-        var removed = await _database.HashDeleteAsync(CartKey(customerId), productId.ToString());
+        var key = CartKey(customerId);
+        var removed = await _database.HashDeleteAsync(key, productId.ToString());
 
-        if (await _database.HashLengthAsync(CartKey(customerId)) == 0)
-            await _database.KeyDeleteAsync(CartKey(customerId));
+        if (await _database.HashLengthAsync(key) == 0)
+            await _database.KeyDeleteAsync(key);
 
         return removed;
     }
 
     public async Task<int> RemoveItemsAsync(Guid customerId, IEnumerable<Guid> productIds)
     {
-        var removed = 0;
-        foreach (var productId in productIds.Distinct())
-        {
-            if (await RemoveItemAsync(customerId, productId))
-                removed++;
-        }
+        var fields = productIds
+            .Distinct()
+            .Select(productId => (RedisValue)productId.ToString())
+            .ToArray();
 
-        return removed;
+        if (fields.Length == 0)
+            return 0;
+
+        var key = CartKey(customerId);
+        var removed = await _database.HashDeleteAsync(key, fields);
+
+        if (await _database.HashLengthAsync(key) == 0)
+            await _database.KeyDeleteAsync(key);
+
+        return (int)removed;
     }
 
     public async Task ClearAsync(Guid customerId)

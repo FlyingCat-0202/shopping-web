@@ -22,6 +22,14 @@ public class IdentityAppDbContext(DbContextOptions<IdentityAppDbContext> options
                   .IsUnique(); // email duy nhất
             entity.HasIndex(c => c.PhoneNumber)
                   .IsUnique(); // phone number duy nhất
+
+            entity.Property(c => c.RefreshTokenHash)
+                  .HasMaxLength(64);
+
+            entity.HasIndex(c => c.RefreshTokenHash)
+                  .IsUnique()
+                  .HasFilter("\"RefreshTokenHash\" IS NOT NULL")
+                  .HasDatabaseName("IX_Users_RefreshTokenHash");
         });
 
         modelBuilder.AddInboxStateEntity();

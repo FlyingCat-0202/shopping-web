@@ -11,6 +11,8 @@ public class ProductDbContext(DbContextOptions<ProductDbContext> options) : DbCo
 
     public DbSet<ProductEntity> Products { get; set; } = null!;
 
+    public DbSet<StockReservation> StockReservations { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("product");
@@ -58,6 +60,33 @@ public class ProductDbContext(DbContextOptions<ProductDbContext> options) : DbCo
 
             entity.HasIndex(p => p.CategoryId)
                   .HasDatabaseName("IX_Products_CategoryId");
+        });
+
+        modelBuilder.Entity<StockReservation>(entity =>
+        {
+            entity.ToTable("StockReservations", "product");
+            entity.HasKey(r => r.Id);
+
+            entity.Property(r => r.Status)
+                  .HasConversion<string>()
+                  .HasMaxLength(30);
+
+            entity.Property(r => r.ReleaseReason)
+                  .HasMaxLength(100);
+
+            entity.ToTable(t => t.HasCheckConstraint("CK_StockReservations_Quantity", "\"Quantity\" > 0"));
+
+            entity.HasIndex(r => new { r.OrderId, r.ProductId })
+                  .IsUnique()
+                  .HasDatabaseName("IX_StockReservations_OrderId_ProductId");
+
+            entity.HasIndex(r => new { r.Status, r.ReservedAt })
+                  .HasDatabaseName("IX_StockReservations_Status_ReservedAt");
+
+            entity.HasOne(r => r.Product)
+                  .WithMany()
+                  .HasForeignKey(r => r.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

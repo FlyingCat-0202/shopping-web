@@ -1,5 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
 using System.Security.Claims;
+using System.Text;
 using Identity.API.Dtos;
 using Identity.Domain.Models;
 using Microsoft.AspNetCore.Identity;
@@ -65,7 +67,7 @@ public static class AuthEndpoints
             var token = CreateJwtToken(user, roles, configuration);
             var refreshToken = GenerateRefreshToken();
             
-            user.RefreshToken = refreshToken;
+            user.RefreshTokenHash = HashRefreshToken(refreshToken);
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
             await userManager.UpdateAsync(user);
 
@@ -96,7 +98,7 @@ public static class AuthEndpoints
             var token = CreateJwtToken(user, roles, configuration);
             var refreshToken = GenerateRefreshToken();
             
-            user.RefreshToken = refreshToken;
+            user.RefreshTokenHash = HashRefreshToken(refreshToken);
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
             await userManager.UpdateAsync(user);
 
@@ -109,7 +111,13 @@ public static class AuthEndpoints
             UserManager<Customer> userManager,
             IConfiguration configuration) =>
         {
-            var user = await userManager.Users.FirstOrDefaultAsync(u => u.RefreshToken == request.RefreshToken);
+            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            {
+                return Results.BadRequest(new { message = "Refresh token is required." });
+            }
+
+            var refreshTokenHash = HashRefreshToken(request.RefreshToken);
+            var user = await userManager.Users.FirstOrDefaultAsync(u => u.RefreshTokenHash == refreshTokenHash);
             
             if (user is null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
             {
@@ -120,7 +128,7 @@ public static class AuthEndpoints
             var newAccessToken = CreateJwtToken(user, roles, configuration);
             var newRefreshToken = GenerateRefreshToken();
 
-            user.RefreshToken = newRefreshToken;
+            user.RefreshTokenHash = HashRefreshToken(newRefreshToken);
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
             await userManager.UpdateAsync(user);
 
@@ -137,9 +145,17 @@ public static class AuthEndpoints
     private static string GenerateRefreshToken()
     {
         var randomNumber = new byte[64];
-        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomNumber);
         return Convert.ToBase64String(randomNumber);
+    }
+
+    private static string HashRefreshToken(string refreshToken)
+    {
+        var tokenBytes = Encoding.UTF8.GetBytes(refreshToken);
+        var hashBytes = SHA256.HashData(tokenBytes);
+
+        return Convert.ToHexString(hashBytes);
     }
 
     private static string CreateJwtToken(Customer user, IEnumerable<string> roles, IConfiguration configuration)
