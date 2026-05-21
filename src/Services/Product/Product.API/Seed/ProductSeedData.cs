@@ -1,3 +1,5 @@
+using EventBus.Contracts; // Thêm thư viện chứa ProductCreatedEvent
+using MassTransit;        // Thêm thư viện MassTransit
 using Microsoft.EntityFrameworkCore;
 using Product.Domain.Entities;
 using Product.Infrastructure.Data;
@@ -7,15 +9,12 @@ namespace Product.API.Seed;
 
 public static class ProductSeedData
 {
-    public static async Task SeedAsync(WebApplication app)
+    // Thay đổi tham số truyền vào của hàm SeedAsync
+    public static async Task SeedAsync(
+        ProductDbContext dbContext,
+        IPublishEndpoint publishEndpoint,
+        ILogger logger)
     {
-        if (!app.Environment.IsDevelopment())
-            return;
-
-        using var scope = app.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
-        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("ProductSeedData");
-
         var categoryDefinitions = new Dictionary<string, string>
         {
             ["Áo"] = "Áo thun, áo sơ mi, áo khoác và hoodie.",
@@ -56,10 +55,31 @@ public static class ProductSeedData
             return;
         }
 
+        // 2. Thêm sản phẩm vào ChangeTracker và Lưu lần 1
         dbContext.Products.AddRange(productsToAdd);
         await dbContext.SaveChangesAsync();
 
-        logger.LogInformation("Seeded {ProductCount} products.", productsToAdd.Count);
+        // 3. Vòng lặp bắn Event cho từng sản phẩm mới tạo
+        foreach (var product in productsToAdd)
+        {
+            var categoryName = categoryByName.FirstOrDefault(c => c.Value == product.CategoryId).Key ?? "Unknown";
+
+            var eventMsg = new ProductCreatedEvent(
+                product.Id,
+                product.Name,
+                product.Description ?? "",
+                product.Price,
+                categoryName,
+                product.IsActive
+            );
+
+            await publishEndpoint.Publish(eventMsg);
+        }
+
+        // 4. Lưu lần 2: Đẩy toàn bộ Event trong Outbox xuống Database
+        await dbContext.SaveChangesAsync();
+
+        logger.LogInformation("Seeded {ProductCount} products and published events to EventBus.", productsToAdd.Count);
     }
 
     private static async Task EnsureCategoriesAsync(

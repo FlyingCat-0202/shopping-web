@@ -147,7 +147,7 @@ builder.Services.AddRedisIdempotency(redisConnectionString);
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync<ProductDbContext>();
-await ProductSeedData.SeedAsync(app);
+//await ProductSeedData.SeedAsync(app);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();

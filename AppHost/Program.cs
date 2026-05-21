@@ -17,6 +17,10 @@ var rabbitmq = builder.AddRabbitMQ("rabbitmq", rabbitMqUserName, rabbitMqPasswor
 
 var redis = builder.AddRedis("redis");
 
+// >>> THÊM CONTAINER ELASTICSEARCH TẠI ĐÂY <<<
+var elasticsearch = builder.AddElasticsearch("elasticsearch")
+    .WithDataVolume(); // Đảm bảo dữ liệu search không bị mất khi tắt Docker
+
 // ── Databases (mỗi service dùng DB riêng) ────────────────────────────────────
 var orderDb = postgres.AddDatabase("order-db");
 var productDb = postgres.AddDatabase("product-db");
@@ -42,9 +46,11 @@ builder.AddProject<Product_API>("product-api")
     .WithReference(productDb)
     .WithReference(rabbitmq)
     .WithReference(redis)
+    .WithReference(elasticsearch) // <--- Nối Elasticsearch vào Product API
     .WaitFor(productDb)
     .WaitFor(rabbitmq)
-    .WaitFor(redis);
+    .WaitFor(redis)
+    .WaitFor(elasticsearch);      // <--- Đợi Elastic chạy xong mới start Product API
 
 builder.AddProject<Identity_API>("identity-api")
     .WithReference(identityDb)

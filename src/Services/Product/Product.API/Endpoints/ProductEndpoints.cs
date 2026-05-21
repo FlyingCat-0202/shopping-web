@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Product.API.Dtos;
 using Product.API.IntegrationEvents.Consumers.Elastic;
+using Product.API.Seed;
 using Product.Domain.Entities;
 using Product.Infrastructure.Data;
 
@@ -293,8 +294,8 @@ public static class ProductEndpoints
 
             if (!searchResponse.IsValidResponse)
             {
-                // Có thể log lỗi ở đây
-                return Results.Problem("Lỗi hệ thống khi tìm kiếm dữ liệu.");
+                // Trả về chi tiết lỗi thật sự của Elasticsearch để dễ bắt bệnh
+                return Results.Problem($"Lỗi chi tiết: {searchResponse.DebugInformation}");
             }
 
             // Trả về kết quả cho Frontend
@@ -305,6 +306,27 @@ public static class ProductEndpoints
                 Items = searchResponse.Documents // Đây chính là list ProductEsDocument
             });
         });
+
+        // API Seed Dữ liệu mẫu
+        group.MapPost("/seed", async (
+            ProductDbContext db,
+            IPublishEndpoint publishEndpoint,
+            ILogger<Program> logger) =>
+        {
+            try
+            {
+                await ProductSeedData.SeedAsync(db, publishEndpoint, logger);
+                return Results.Ok(new { message = "Đã chạy lệnh Seed dữ liệu thành công! Hãy kiểm tra Elasticsearch." });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Lỗi trong quá trình Seed data");
+                return Results.Problem("Có lỗi xảy ra khi Seed dữ liệu: " + ex.Message);
+            }
+        })
+        .WithName("SeedProducts")
+        .WithDescription("Tự động nạp 100 sản phẩm mẫu vào Database và Elasticsearch");
+        // .RequireAuthorization(EndpointHelpers.AdminOnly); // Mở comment dòng này nếu bắt buộc phải có token Admin mới được seed
     }
 
 
