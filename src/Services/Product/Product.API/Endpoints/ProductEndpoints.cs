@@ -2,6 +2,7 @@ using EventBus.Contracts;
 using EventBus.Extensions;
 using EventBus.Infrastructure;
 using MassTransit;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Product.API.Dtos;
 using Product.Domain.Entities;
@@ -11,9 +12,9 @@ namespace Product.API.Endpoints;
 
 public static class ProductEndpoints
 {
-    private const string ProductCreateRoutingKey = "product-create";
-    private const string ProductDeleteRoutingKey = "product-delete";
-    private const string ProductUpdateRoutingKey = "product-update";
+    //private const string ProductCreateRoutingKey = "product-create";
+    //private const string ProductDeleteRoutingKey = "product-delete";
+    //private const string ProductUpdateRoutingKey = "product-update";
 
     public static void MapProductEndpoints(this IEndpointRouteBuilder app)
     {
@@ -102,45 +103,56 @@ public static class ProductEndpoints
             }
         });
 
-        // Thay đổi category cho product
-        group.MapPut("/{productId:guid}/category/{categoryId:int}", async (
+        // Gộp tất cả vào 1 Endpoint chuẩn RESTful: PUT /api/products/{productId}
+        group.MapPut("/{productId:guid}", async (
             Guid productId,
-            int categoryId,
+            [FromBody] UpdateProductRequest request, // Lấy dữ liệu từ JSON Body
             ProductDbContext db,
             IPublishEndpoint publishEndpoint,
             CancellationToken cancellationToken) =>
         {
-            var category = await db.Categories
+            // 1. Kiểm tra sản phẩm có tồn tại không
+            var productExists = await db.Products
                 .AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Id == categoryId, cancellationToken);
+                .AnyAsync(p => p.Id == productId && p.IsActive, cancellationToken);
 
-            if (category is null)
-                return Results.NotFound(new { message = "Danh mục không tồn tại." });
-
-            var product = await db.Products
-                .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Id == productId && p.IsActive, cancellationToken);
-
-            if (product is null)
+            if (!productExists)
                 return Results.NotFound(new { message = "Sản phẩm không tồn tại hoặc đã ngừng kinh doanh." });
 
-            await SendMessage(
-                new UpdateProductRequest(productId, category.Id),
-                publishEndpoint,
-                ProductUpdateRoutingKey,
-                cancellationToken);
+            // 2. (Tùy chọn) Kiểm tra Category nếu categoryId bị đổi
+            var categoryExists = await db.Categories
+                .AsNoTracking()
+                .AnyAsync(c => c.Id == request.CategoryId, cancellationToken);
+
+            if (!categoryExists)
+                return Results.NotFound(new { message = "Danh mục không tồn tại." });
+
+            // 3. Đóng gói dữ liệu gửi lên Exchange
+            var updateMsg = new UpdateProductRequest(
+                productId,
+                request.Name,
+                request.Price,
+                request.StockQuantity,
+                request.IsActive,
+                request.Description,
+                request.ImgUrl,
+                request.CategoryId
+            );
+
+            await SendMessage(updateMsg, publishEndpoint, cancellationToken);
+
+            // 4. Lưu vào Outbox
             await db.SaveChangesAsync(cancellationToken);
 
             return Results.Accepted(null, new
             {
-                message = "Yêu cầu cập nhật danh mục sản phẩm đã được đưa vào hàng đợi.",
-                ProductId = productId,
-                CategoryId = category.Id
+                message = "Yêu cầu cập nhật sản phẩm đã được đưa vào hàng đợi.",
+                ProductId = productId
             });
         })
         .RequireAuthorization(EndpointHelpers.AdminOnly)
+        .AddEndpointFilter<ValidationFilter<UpdateProductRequest>>() // Nếu bạn có fluent validation
         .AddEndpointFilter<IdempotencyFilter>();
-
 
         // Xóa Product theo id
         group.MapDelete("/{id:guid}", async (
@@ -159,7 +171,6 @@ public static class ProductEndpoints
             await SendMessage(
                 new DeleteProductRequest(id),
                 publishEndpoint,
-                ProductDeleteRoutingKey,
                 cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
 
@@ -227,7 +238,7 @@ public static class ProductEndpoints
                 request.ImageUrl,
                 request.IsActive);
 
-            await SendMessage(msg, publishEndpoint, ProductCreateRoutingKey, cancellationToken);
+            await SendMessage(msg, publishEndpoint, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
 
             return Results.Accepted(null, new { message = "Yêu cầu tạo sản phẩm đã được đưa vào hàng đợi." });
@@ -240,12 +251,8 @@ public static class ProductEndpoints
     private static async Task SendMessage<T>(
         T msg,
         IPublishEndpoint publishEndpoint,
-        string routingKey,
         CancellationToken cancellationToken)
     {
-        await publishEndpoint.Publish(msg!, context =>
-        {
-            context.SetRoutingKey(routingKey);
-        }, cancellationToken);
+        await publishEndpoint.Publish(msg!, cancellationToken);
     }
 }

@@ -3,7 +3,7 @@ using MassTransit;
 using Product.Infrastructure.Data;
 
 namespace Product.API.IntegrationEvents.Consumers.Self;
-public class ProductDeleteConsumer(ProductDbContext db, ILogger<ProductDeleteConsumer> logger) : IConsumer<DeleteProductRequest>
+public class ProductDeleteConsumer(ProductDbContext db, ILogger<ProductDeleteConsumer> logger, IPublishEndpoint pe) : IConsumer<DeleteProductRequest>
 {
     public async Task Consume(ConsumeContext<DeleteProductRequest> context)
     {
@@ -27,7 +27,12 @@ public class ProductDeleteConsumer(ProductDbContext db, ILogger<ProductDeleteCon
             }
 
             product.IsActive = false;
-            product.StockQuantity = 0;
+
+            // Thiết lập data để bắn vào queue Elastic
+            var eventMsg = new ProductDeletedEvent(
+                    product.Id
+            );
+            await pe.Publish(eventMsg, context.CancellationToken);
 
             await db.SaveChangesAsync(context.CancellationToken);
             if (logger.IsEnabled(LogLevel.Information))

@@ -5,11 +5,13 @@ using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Product.API.Endpoints;
+using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
 using Product.API.Validators;
 using Product.Infrastructure.Data;
 using ServiceDefault;
+using Elastic.Clients.Elasticsearch;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +36,16 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.AddApiServiceDefaults();
 builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
+// >>> THÊM ĐOẠN CODE NÀY VÀO ĐÂY <<<
+var elasticUri = builder.Configuration.GetConnectionString("elasticsearch")
+                 ?? "http://localhost:9200"; // Đổi port tùy theo Docker của bạn
+
+var settings = new ElasticsearchClientSettings(new Uri(elasticUri))
+    // .Authentication(new BasicAuthentication("elastic", "changeme")) // Bỏ comment nếu ES của bạn có cài password
+    .DefaultIndex("products"); // (Tùy chọn) Đặt index mặc định để mốt khỏi phải gõ lại chuỗi "products"
+
+builder.Services.AddSingleton(new ElasticsearchClient(settings));
+// >>> KẾT THÚC ĐOẠN THÊM MỚI <<<
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -74,6 +86,7 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<ProductCreationConsumer>();
     x.AddConsumer<ProductDeleteConsumer>();
     x.AddConsumer<ProductUpdateConsumer>();
+    x.AddConsumer<SyncProductToElasticConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -114,6 +127,11 @@ builder.Services.AddMassTransit(x =>
         {
             e.UseEntityFrameworkOutbox<ProductDbContext>(context);
             e.ConfigureConsumer<ProductUpdateConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("elastic-search", e =>
+        {
+            e.ConfigureConsumer<SyncProductToElasticConsumer>(context);
         });
     });
 });
