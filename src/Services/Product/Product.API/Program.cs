@@ -8,6 +8,7 @@ using Product.API.Endpoints;
 using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
+using Product.API.Seed;
 using Product.API.Validators;
 using Product.Infrastructure.Data;
 using ServiceDefault;
@@ -36,6 +37,7 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.AddApiServiceDefaults();
 builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
+builder.Services.AddScoped<IStockReservationService, StockReservationService>();
 // >>> THÊM ĐOẠN CODE NÀY VÀO ĐÂY <<<
 var elasticUri = builder.Configuration.GetConnectionString("elasticsearch")
                  ?? "http://localhost:9200"; // Đổi port tùy theo Docker của bạn
@@ -145,6 +147,7 @@ builder.Services.AddRedisIdempotency(redisConnectionString);
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync<ProductDbContext>();
+await ProductSeedData.SeedAsync(app);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();

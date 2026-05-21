@@ -18,6 +18,7 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
                 logger.LogInformation("Nhận yêu cầu trừ kho cho Order {OrderId}", message.OrderId);
             }
 
+            // ── Gom sản phẩm từ message ───────────────────────
             var orderItems = message.Items
                 .GroupBy(x => x.ProductId)
                 .Select(g => new
@@ -26,7 +27,7 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
                     Quantity = g.Sum(x => x.Quantity)
                 })
                 .ToList();
-
+            // ── Nếu đơn hàng không có sản phẩm thì khỏi giữ kho ───────────────────────
             if (orderItems.Count == 0)
             {
                 logger.LogWarning("Order {OrderId} không có sản phẩm để trừ kho.", message.OrderId);
@@ -39,20 +40,24 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
                 return;
             }
 
+            // ── Kiểm tra xem Order này đã có stock reservation chưa ───────────────────────
             var existingReservations = await dbContext.StockReservations
                 .Where(r => r.OrderId == message.OrderId)
                 .ToListAsync(context.CancellationToken);
 
+            // ── Nếu đã có reservation rồi thì phải đảm bảo data khớp và không bị duplicate event ───────────────────────
             if (existingReservations.Count > 0)
             {
-                var expectedProductIds = orderItems.Select(x => x.ProductId).ToHashSet();
-                var existingProductIds = existingReservations.Select(x => x.ProductId).ToHashSet();
+                var expectedItems = orderItems.ToDictionary(x => x.ProductId, x => x.Quantity);
+                var existingItems = existingReservations.ToDictionary(x => x.ProductId, x => x.Quantity);
 
-                if (!expectedProductIds.SetEquals(existingProductIds))
+                if (expectedItems.Count != existingItems.Count ||
+                    expectedItems.Any(x => !existingItems.TryGetValue(x.Key, out var quantity) || quantity != x.Value))
                 {
                     throw new InvalidOperationException($"Stock reservation data không khớp với Order {message.OrderId}.");
                 }
 
+                // ── Order đã được xử lý ───────────────────────
                 if (existingReservations.All(r => r.Status == StockReservationStatus.Reserved) ||
                     existingReservations.All(r => r.Status == StockReservationStatus.Released))
                 {
@@ -63,11 +68,13 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
                 throw new InvalidOperationException($"Stock reservation status không hợp lệ cho Order {message.OrderId}.");
             }
 
+            // ── Kiểm tra tồn kho và tạo stock reservation ───────────────────────
             var productIds = orderItems.Select(x => x.ProductId).ToList();
             var products = await dbContext.Products
                 .Where(p => productIds.Contains(p.Id) && p.IsActive)
                 .ToListAsync(context.CancellationToken);
 
+            // ── Nếu có sản phẩm nào không tồn tại hoặc ngừng kinh doanh thì phải trả về lỗi ───────────────────────
             if (products.Count != productIds.Count)
             {
                 logger.LogWarning("Không tìm thấy một số sản phẩm cho Order {OrderId}", message.OrderId);
@@ -81,7 +88,7 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
             }
 
             var productById = products.ToDictionary(p => p.Id);
-
+            // ── Kiểm tra từng sản phẩm xem có đủ hàng không ───────────────────────
             foreach (var item in orderItems)
             {
                 var p = productById[item.ProductId];
@@ -99,6 +106,7 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
                 }
             }
 
+            // ── Trừ kho và tạo stock reservation ───────────────────────
             foreach (var item in orderItems)
             {
                 var p = productById[item.ProductId];
@@ -118,7 +126,8 @@ public class OrderCreatedConsumer(ProductDbContext dbContext, ILogger<OrderCreat
                     UnitPrice = productById[i.ProductId].Price
                 })]
             }, context.CancellationToken);
-
+            
+            // ── Lưu thay đổi vào database ───────────────────────
             await dbContext.SaveChangesAsync(context.CancellationToken);
             if (logger.IsEnabled(LogLevel.Information))
             {

@@ -5,7 +5,10 @@ using Product.Infrastructure.Data;
 
 namespace Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 
-public class OrderReturnedConsumer(ProductDbContext dbContext, ILogger<OrderReturnedConsumer> logger) : IConsumer<OrderReturnedEvent>
+public class OrderReturnedConsumer(
+    ProductDbContext dbContext,
+    IStockReservationService stockReservationService,
+    ILogger<OrderReturnedConsumer> logger) : IConsumer<OrderReturnedEvent>
 {
     public async Task Consume(ConsumeContext<OrderReturnedEvent> context)
     {
@@ -23,8 +26,8 @@ public class OrderReturnedConsumer(ProductDbContext dbContext, ILogger<OrderRetu
                 return;
             }
 
-            var releasedCount = await StockReservationReleaseHelper.ReleaseReservedStockAsync(
-                dbContext,
+            // ── Hoàn kho cho các sản phẩm trong đơn hàng ───────────────────────
+            var releasedCount = await stockReservationService.ReleaseReservedStockAsync(
                 message.OrderId,
                 message.Items,
                 "Returned",

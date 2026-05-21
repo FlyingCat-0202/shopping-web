@@ -5,7 +5,10 @@ using Product.Infrastructure.Data;
 
 namespace Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 
-public class OrderCancelledConsumer(ProductDbContext dbContext, ILogger<OrderCancelledConsumer> logger) : IConsumer<OrderCancelledEvent>
+public class OrderCancelledConsumer(
+    ProductDbContext dbContext,
+    IStockReservationService stockReservationService,
+    ILogger<OrderCancelledConsumer> logger) : IConsumer<OrderCancelledEvent>
 {
     public async Task Consume(ConsumeContext<OrderCancelledEvent> context)
     {
@@ -22,9 +25,9 @@ public class OrderCancelledConsumer(ProductDbContext dbContext, ILogger<OrderCan
                 logger.LogWarning("Đơn hàng {OrderId} không có sản phẩm để hoàn kho.", message.OrderId);
                 return;
             }
-
-            var releasedCount = await StockReservationReleaseHelper.ReleaseReservedStockAsync(
-                dbContext,
+            
+            // ── Hoàn kho cho các sản phẩm trong đơn hàng ───────────────────────
+            var releasedCount = await stockReservationService.ReleaseReservedStockAsync(
                 message.OrderId,
                 message.Items,
                 "Cancelled",
