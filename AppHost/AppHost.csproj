@@ -25,6 +25,7 @@
     <ProjectReference Include="..\src\Services\Cart\Cart.API\Cart.API.csproj" />
     <ProjectReference Include="..\src\Services\Product\Product.API\Product.API.csproj" />
     <ProjectReference Include="..\src\Services\Payment\Payment.API\Payment.API.csproj" />
+    <ProjectReference Include="..\src\Services\Notification\Notification.API\Notification.API.csproj" />
   </ItemGroup>
 
 </Project>

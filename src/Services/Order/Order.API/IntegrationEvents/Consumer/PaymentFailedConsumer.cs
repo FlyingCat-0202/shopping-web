@@ -10,6 +10,7 @@ public class PaymentFailedConsumer(OrderDbContext dbContext, ILogger<PaymentFail
     : IConsumer<PaymentFailedEvent>
 {
     private const string OrderCancelledRoutingKey = "order-cancelled";
+    private const string OrderStatusChangedRoutingKey = "order-status-changed";
 
     public async Task Consume(ConsumeContext<PaymentFailedEvent> context)
     {
@@ -26,6 +27,7 @@ public class PaymentFailedConsumer(OrderDbContext dbContext, ILogger<PaymentFail
             if (order.Status != OrderStatus.PaymentPending)
                 return;
 
+            var oldStatus = order.Status;
             order.CancelDueToPaymentFailure();
 
             var items = order.Items
@@ -35,6 +37,14 @@ public class PaymentFailedConsumer(OrderDbContext dbContext, ILogger<PaymentFail
             await context.Publish(new OrderCancelledEvent { OrderId = order.Id, Items = items },
                 ctx => ctx.SetRoutingKey(OrderCancelledRoutingKey),
                 context.CancellationToken);
+            await context.Publish(new OrderStatusChangedEvent
+            {
+                OrderId = order.Id,
+                CustomerId = order.CustomerId,
+                OldStatus = oldStatus.ToString(),
+                NewStatus = order.Status.ToString(),
+                Reason = $"Payment failed: {message.Reason}"
+            }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), context.CancellationToken);
 
             await dbContext.SaveChangesAsync(context.CancellationToken);
 

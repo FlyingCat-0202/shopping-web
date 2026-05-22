@@ -10,6 +10,8 @@ public class StockReservationFailedConsumer(
     ILogger<StockReservationFailedConsumer> logger)
     : IConsumer<StockReservationFailedEvent>
 {
+    private const string OrderStatusChangedRoutingKey = "order-status-changed";
+
     public async Task Consume(ConsumeContext<StockReservationFailedEvent> context)
     {
         try
@@ -24,7 +26,17 @@ public class StockReservationFailedConsumer(
 
             if (order.Status == OrderStatus.Pending)
             {
+                var oldStatus = order.Status;
                 order.CancelDueToStockFailure();
+                await context.Publish(new OrderStatusChangedEvent
+                {
+                    OrderId = order.Id,
+                    CustomerId = order.CustomerId,
+                    OldStatus = oldStatus.ToString(),
+                    NewStatus = order.Status.ToString(),
+                    Reason = $"Stock reservation failed: {message.Reason}"
+                }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), context.CancellationToken);
+
                 await dbContext.SaveChangesAsync(context.CancellationToken);
 
                 logger.LogWarning(

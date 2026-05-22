@@ -10,6 +10,7 @@ public class PaymentSucceededConsumer(OrderDbContext dbContext, ILogger<PaymentS
     : IConsumer<PaymentSucceededEvent>
 {
     private const string CartItemsRemovedRoutingKey = "cart-items-removed";
+    private const string OrderStatusChangedRoutingKey = "order-status-changed";
 
     public async Task Consume(ConsumeContext<PaymentSucceededEvent> context)
     {
@@ -25,6 +26,7 @@ public class PaymentSucceededConsumer(OrderDbContext dbContext, ILogger<PaymentS
 
             if (order.Status == OrderStatus.PaymentPending)
             {
+                var oldStatus = order.Status;
                 order.ConfirmPayment();
 
                 var productIds = order.Items.Select(od => od.ProductId).ToList();
@@ -33,6 +35,14 @@ public class PaymentSucceededConsumer(OrderDbContext dbContext, ILogger<PaymentS
                     CustomerId = order.CustomerId,
                     ProductIds = productIds
                 }, ctx => ctx.SetRoutingKey(CartItemsRemovedRoutingKey), context.CancellationToken);
+                await context.Publish(new OrderStatusChangedEvent
+                {
+                    OrderId = order.Id,
+                    CustomerId = order.CustomerId,
+                    OldStatus = oldStatus.ToString(),
+                    NewStatus = order.Status.ToString(),
+                    Reason = "Payment succeeded."
+                }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), context.CancellationToken);
 
                 await dbContext.SaveChangesAsync(context.CancellationToken);
 

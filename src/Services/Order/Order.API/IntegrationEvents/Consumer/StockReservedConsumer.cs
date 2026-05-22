@@ -12,6 +12,7 @@ public class StockReservedConsumer(OrderDbContext dbContext, ILogger<StockReserv
     private const string PaymentRequestedRoutingKey = "payment-requested";
     private const string OrderCancelledRoutingKey = "order-cancelled";
     private const string CartItemsRemovedRoutingKey = "cart-items-removed";
+    private const string OrderStatusChangedRoutingKey = "order-status-changed";
 
     public async Task Consume(ConsumeContext<StockReservedEvent> context)
     {
@@ -27,6 +28,7 @@ public class StockReservedConsumer(OrderDbContext dbContext, ILogger<StockReserv
             if (order.Status == OrderStatus.Pending)
             {
                 // ── Cập nhật trạng thái đơn hàng và giá tiền ───────────────────────────────────────────────
+                var oldStatus = order.Status;
                 var prices = message.Items.ToDictionary(i => i.ProductId, i => i.UnitPrice);
                 order.MarkStockReserved(prices);
 
@@ -37,6 +39,11 @@ public class StockReservedConsumer(OrderDbContext dbContext, ILogger<StockReserv
                         "Order {OrderId} đã giữ kho và gửi yêu cầu thanh toán online với TotalAmount = {TotalAmount}",
                         order.Id,
                         order.TotalAmount);
+                    await PublishOrderStatusChanged(
+                        context,
+                        order,
+                        oldStatus,
+                        "Stock reserved, waiting for online payment.");
                 }
                 else
                 {
@@ -45,6 +52,11 @@ public class StockReservedConsumer(OrderDbContext dbContext, ILogger<StockReserv
                         "Order COD {OrderId} đã giữ kho và chuyển sang Processing với TotalAmount = {TotalAmount}",
                         order.Id,
                         order.TotalAmount);
+                    await PublishOrderStatusChanged(
+                        context,
+                        order,
+                        oldStatus,
+                        "Stock reserved for COD order.");
                 }
 
                 await dbContext.SaveChangesAsync(context.CancellationToken);
@@ -94,4 +106,18 @@ public class StockReservedConsumer(OrderDbContext dbContext, ILogger<StockReserv
             ProductIds = productIds
         }, ctx => ctx.SetRoutingKey(CartItemsRemovedRoutingKey), context.CancellationToken);
     }
+
+    private static Task PublishOrderStatusChanged(
+        ConsumeContext context,
+        Domain.Entities.Order order,
+        OrderStatus oldStatus,
+        string reason)
+        => context.Publish(new OrderStatusChangedEvent
+        {
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            OldStatus = oldStatus.ToString(),
+            NewStatus = order.Status.ToString(),
+            Reason = reason
+        }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), context.CancellationToken);
 }

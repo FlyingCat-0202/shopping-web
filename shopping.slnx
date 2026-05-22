@@ -28,6 +28,11 @@
     <Project Path="src\Services\Payment\Payment.Domain\Payment.Domain.csproj" />
     <Project Path="src\Services\Payment\Payment.Infrastructure\Payment.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Notification/">
+    <Project Path="src\Services\Notification\Notification.API\Notification.API.csproj" />
+    <Project Path="src\Services\Notification\Notification.Domain\Notification.Domain.csproj" />
+    <Project Path="src\Services\Notification\Notification.Infrastructure\Notification.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Product/">
     <Project Path="src\Services\Product\Product.API\Product.API.csproj" />
     <Project Path="src\Services\Product\Product.Domain\Product.Domain.csproj" />

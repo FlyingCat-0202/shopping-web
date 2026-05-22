@@ -16,6 +16,7 @@ public static class OrderEndpoints
     private const string OrderCreatedRoutingKey = "order-created";
     private const string OrderCancelledRoutingKey = "order-cancelled";
     private const string OrderReturnedRoutingKey = "order-returned";
+    private const string OrderStatusChangedRoutingKey = "order-status-changed";
 
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)
     {
@@ -198,12 +199,19 @@ public static class OrderEndpoints
             .FirstOrDefaultAsync(o => o.Id == id && o.CustomerId == customerId, cancellationToken);
         if (order == null) return Results.NotFound();
 
+        var oldStatus = order.Status;
         try { order.Cancel(); }
         catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
 
         var items = order.Items.Select(od => new OrderItemInfo { ProductId = od.ProductId, Quantity = od.Quantity }).ToList();
         await publishEndpoint.Publish(new OrderCancelledEvent { OrderId = order.Id, Items = items },
             ctx => ctx.SetRoutingKey(OrderCancelledRoutingKey),
+            cancellationToken);
+        await PublishOrderStatusChanged(
+            publishEndpoint,
+            order,
+            oldStatus,
+            "Customer cancelled order.",
             cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
@@ -214,6 +222,7 @@ public static class OrderEndpoints
         Guid id,
         ClaimsPrincipal user,
         OrderDbContext db,
+        IPublishEndpoint publishEndpoint,
         CancellationToken cancellationToken)
     {
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
@@ -222,8 +231,15 @@ public static class OrderEndpoints
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id && o.CustomerId == customerId, cancellationToken);
         if (order == null) return Results.NotFound();
 
+        var oldStatus = order.Status;
         try { order.RequestReturn(); }
         catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        await PublishOrderStatusChanged(
+            publishEndpoint,
+            order,
+            oldStatus,
+            "Customer requested return.",
+            cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(new { message = "Yêu cầu trả hàng đã được ghi nhận.", OrderId = order.Id });
@@ -284,6 +300,7 @@ public static class OrderEndpoints
         var order = await db.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order == null) return Results.NotFound();
 
+        var oldStatus = order.Status;
         try { order.ApproveReturn(); }
         catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
 
@@ -291,38 +308,92 @@ public static class OrderEndpoints
         await publishEndpoint.Publish(new OrderReturnedEvent { OrderId = order.Id, Items = items },
             ctx => ctx.SetRoutingKey(OrderReturnedRoutingKey),
             cancellationToken);
+        await PublishOrderStatusChanged(
+            publishEndpoint,
+            order,
+            oldStatus,
+            "Admin approved return.",
+            cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(new { message = "Đã duyệt trả hàng thành công.", OrderId = order.Id });
     }
 
-    private static async Task<IResult> RejectReturn(Guid id, OrderDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> RejectReturn(
+        Guid id,
+        OrderDbContext db,
+        IPublishEndpoint publishEndpoint,
+        CancellationToken cancellationToken)
     {
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order == null) return Results.NotFound();
+        var oldStatus = order.Status;
         try { order.RejectReturn(); }
         catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        await PublishOrderStatusChanged(
+            publishEndpoint,
+            order,
+            oldStatus,
+            "Admin rejected return.",
+            cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(new { message = "Yêu cầu trả hàng đã bị từ chối.", OrderId = order.Id });
     }
 
-    private static async Task<IResult> ShipOrder(Guid id, OrderDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> ShipOrder(
+        Guid id,
+        OrderDbContext db,
+        IPublishEndpoint publishEndpoint,
+        CancellationToken cancellationToken)
     {
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order == null) return Results.NotFound();
+        var oldStatus = order.Status;
         try { order.Ship(); }
         catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        await PublishOrderStatusChanged(
+            publishEndpoint,
+            order,
+            oldStatus,
+            "Admin shipped order.",
+            cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(new { message = "Đơn hàng đã được chuyển sang trạng thái đang giao.", OrderId = order.Id });
     }
 
-    private static async Task<IResult> DeliverOrder(Guid id, OrderDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> DeliverOrder(
+        Guid id,
+        OrderDbContext db,
+        IPublishEndpoint publishEndpoint,
+        CancellationToken cancellationToken)
     {
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order == null) return Results.NotFound();
+        var oldStatus = order.Status;
         try { order.Deliver(); }
         catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        await PublishOrderStatusChanged(
+            publishEndpoint,
+            order,
+            oldStatus,
+            "Admin marked order as delivered.",
+            cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(new { message = "Đơn hàng đã được xác nhận giao thành công.", OrderId = order.Id });
     }
+
+    private static Task PublishOrderStatusChanged(
+        IPublishEndpoint publishEndpoint,
+        OrderEntity order,
+        OrderStatus oldStatus,
+        string reason,
+        CancellationToken cancellationToken)
+        => publishEndpoint.Publish(new OrderStatusChangedEvent
+        {
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            OldStatus = oldStatus.ToString(),
+            NewStatus = order.Status.ToString(),
+            Reason = reason
+        }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), cancellationToken);
 }

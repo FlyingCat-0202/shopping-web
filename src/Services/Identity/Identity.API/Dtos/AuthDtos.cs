@@ -3,3 +3,10 @@ public record RegisterRequest(string Email, string Password, string FullName, st
 public record LoginRequest(string EmailOrPhone, string Password);
 public record AuthResponse(string Token, string RefreshToken, string FullName, string Email, string Role);
 public record RefreshTokenRequest(string RefreshToken);
+public record RefreshTokenSessionResponse(
+    Guid Id,
+    string? DeviceInfo,
+    DateTime CreatedAt,
+    DateTime ExpiresAt,
+    DateTime? RevokedAt,
+    bool IsActive);

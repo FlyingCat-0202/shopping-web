@@ -26,6 +26,7 @@ var orderDb = postgres.AddDatabase("order-db");
 var productDb = postgres.AddDatabase("product-db");
 var identityDb = postgres.AddDatabase("identity-db");
 var paymentDb = postgres.AddDatabase("payment-db");
+var notificationDb = postgres.AddDatabase("notification-db");
 
 // ── Services ──────────────────────────────────────────────────────────────────
 builder.AddProject<Order_API>("order-api")
@@ -65,6 +66,14 @@ builder.AddProject<Payment_API>("payment-api")
     .WithReference(rabbitmq)
     .WithReference(redis)
     .WaitFor(paymentDb)
+    .WaitFor(rabbitmq)
+    .WaitFor(redis);
+
+builder.AddProject<Notification_API>("notification-api")
+    .WithReference(notificationDb)
+    .WithReference(rabbitmq)
+    .WithReference(redis)
+    .WaitFor(notificationDb)
     .WaitFor(rabbitmq)
     .WaitFor(redis);
 
