@@ -17,63 +17,74 @@ public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<Order
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                using var scope = serviceProvider.CreateScope();
-                var dbContext = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
-                var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
-
-                var timeoutThreshold = DateTime.UtcNow.AddMinutes(-15);
-                var expiredOrders = await dbContext.Orders
-                    .Where(o => o.Status == OrderStatus.Pending && o.OrderDate < timeoutThreshold)
-                    .OrderBy(o => o.OrderDate)
-                    .Take(100)
-                    .ToListAsync(stoppingToken);
-
-                if (expiredOrders.Count > 0)
+                try
                 {
-                    foreach (var order in expiredOrders)
+                    using var scope = serviceProvider.CreateScope();
+                    var dbContext = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+                    var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
+
+                    var timeoutThreshold = DateTime.UtcNow.AddMinutes(-15);
+                    var expiredOrders = await dbContext.Orders
+                        .Where(o => o.Status == OrderStatus.Pending && o.OrderDate < timeoutThreshold)
+                        .OrderBy(o => o.OrderDate)
+                        .Take(100)
+                        .ToListAsync(stoppingToken);
+
+                    if (expiredOrders.Count > 0)
                     {
-                        var oldStatus = order.Status;
-                        order.CancelDueToStockFailure();
-                        var reason = "Order timeout while waiting for stock reservation.";
-
-                        var saga = await dbContext.OrderSagaStates
-                            .FirstOrDefaultAsync(s => s.OrderId == order.Id, stoppingToken);
-
-                        if (saga is null)
+                        foreach (var order in expiredOrders)
                         {
-                            saga = OrderSagaState.Start(order.Id, order.CustomerId, order.PaymentMethod.ToString());
-                            dbContext.OrderSagaStates.Add(saga);
+                            var oldStatus = order.Status;
+                            order.CancelDueToStockFailure();
+                            var reason = "Order timeout while waiting for stock reservation.";
+
+                            var saga = await dbContext.OrderSagaStates
+                                .FirstOrDefaultAsync(s => s.OrderId == order.Id, stoppingToken);
+
+                            if (saga is null)
+                            {
+                                saga = OrderSagaState.Start(order.Id, order.CustomerId, order.PaymentMethod.ToString());
+                                dbContext.OrderSagaStates.Add(saga);
+                            }
+
+                            if (!saga.IsCompleted)
+                                saga.Fail(reason);
+
+                            await publishEndpoint.Publish(new OrderStatusChangedEvent
+                            {
+                                CorrelationId = order.Id,
+                                OrderId = order.Id,
+                                CustomerId = order.CustomerId,
+                                OldStatus = oldStatus.ToString(),
+                                NewStatus = order.Status.ToString(),
+                                Reason = reason
+                            }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), stoppingToken);
+
+                            logger.LogWarning("Order {OrderId} đã bị hủy tự động do quá thời gian chờ giữ kho", order.Id);
                         }
 
-                        if (!saga.IsCompleted)
-                            saga.Fail(reason);
-
-                        await publishEndpoint.Publish(new OrderStatusChangedEvent
-                        {
-                            CorrelationId = order.Id,
-                            OrderId = order.Id,
-                            CustomerId = order.CustomerId,
-                            OldStatus = oldStatus.ToString(),
-                            NewStatus = order.Status.ToString(),
-                            Reason = reason
-                        }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), stoppingToken);
-
-                        logger.LogWarning("Order {OrderId} đã bị hủy tự động do quá thời gian chờ giữ kho", order.Id);
+                        await dbContext.SaveChangesAsync(stoppingToken);
                     }
-
-                    await dbContext.SaveChangesAsync(stoppingToken);
                 }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Lỗi khi chạy OrderTimeoutService");
-            }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Lỗi khi chạy OrderTimeoutService");
+                }
 
-            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            logger.LogInformation("OrderTimeoutService đã dừng.");
         }
     }
 }

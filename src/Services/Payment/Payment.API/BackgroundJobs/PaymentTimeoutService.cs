@@ -13,49 +13,60 @@ public class PaymentTimeoutService(IServiceProvider serviceProvider, ILogger<Pay
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                using var scope = serviceProvider.CreateScope();
-                var dbContext = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
-                var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
-
-                var timeoutThreshold = DateTime.UtcNow.AddMinutes(-10);
-                var expiredPayments = await dbContext.Payments
-                    .Where(p => p.Status == PaymentStatus.Pending && p.CreatedAt < timeoutThreshold)
-                    .OrderBy(p => p.CreatedAt)
-                    .Take(100)
-                    .ToListAsync(stoppingToken);
-
-                foreach (var payment in expiredPayments)
+                try
                 {
-                    payment.MarkExpired("Thanh toán quá thời gian xử lý.");
+                    using var scope = serviceProvider.CreateScope();
+                    var dbContext = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
+                    var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
 
-                    await publishEndpoint.Publish(new PaymentFailedEvent
+                    var timeoutThreshold = DateTime.UtcNow.AddMinutes(-10);
+                    var expiredPayments = await dbContext.Payments
+                        .Where(p => p.Status == PaymentStatus.Pending && p.CreatedAt < timeoutThreshold)
+                        .OrderBy(p => p.CreatedAt)
+                        .Take(100)
+                        .ToListAsync(stoppingToken);
+
+                    foreach (var payment in expiredPayments)
                     {
-                        CorrelationId = payment.OrderId,
-                        PaymentId = payment.Id,
-                        OrderId = payment.OrderId,
-                        CustomerId = payment.CustomerId,
-                        Reason = payment.FailureReason ?? "Thanh toán quá thời gian xử lý."
-                    }, ctx => ctx.SetRoutingKey(PaymentFailedRoutingKey), stoppingToken);
+                        payment.MarkExpired("Thanh toán quá thời gian xử lý.");
 
-                    logger.LogWarning(
-                        "Payment {PaymentId} của Order {OrderId} đã hết hạn do quá thời gian xử lý.",
-                        payment.Id,
-                        payment.OrderId);
+                        await publishEndpoint.Publish(new PaymentFailedEvent
+                        {
+                            CorrelationId = payment.OrderId,
+                            PaymentId = payment.Id,
+                            OrderId = payment.OrderId,
+                            CustomerId = payment.CustomerId,
+                            Reason = payment.FailureReason ?? "Thanh toán quá thời gian xử lý."
+                        }, ctx => ctx.SetRoutingKey(PaymentFailedRoutingKey), stoppingToken);
+
+                        logger.LogWarning(
+                            "Payment {PaymentId} của Order {OrderId} đã hết hạn do quá thời gian xử lý.",
+                            payment.Id,
+                            payment.OrderId);
+                    }
+
+                    if (expiredPayments.Count > 0)
+                        await dbContext.SaveChangesAsync(stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Lỗi khi chạy PaymentTimeoutService");
                 }
 
-                if (expiredPayments.Count > 0)
-                    await dbContext.SaveChangesAsync(stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Lỗi khi chạy PaymentTimeoutService");
-            }
-
-            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            logger.LogInformation("PaymentTimeoutService đã dừng.");
         }
     }
 }

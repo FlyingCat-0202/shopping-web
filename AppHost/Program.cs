@@ -79,14 +79,16 @@ var notificationApi = builder.AddProject<Notification_API>("notification-api")
 
 builder.AddExecutable(
         "web-store-angular",
-        "npm",
+        "powershell",
         "../src/Web/web-store-angular",
-        "run",
-        "start",
-        "--",
-        "--host",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "start-aspire.ps1",
+        "-HostAddress",
         "0.0.0.0",
-        "--port",
+        "-Port",
         "4200")
     .WithHttpEndpoint(port: 4200, targetPort: 4200, name: "http", isProxied: false)
     .WaitFor(identityApi)
