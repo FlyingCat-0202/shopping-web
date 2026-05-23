@@ -28,19 +28,17 @@ public static class CartEndpoints
     private static async Task<IResult> GetCart(
         ClaimsPrincipal user,
         ICartStore cartStore,
-        ILoggerFactory loggerFactory,
-        CancellationToken cancellationToken)
+        ILoggerFactory loggerFactory)
     {
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
 
-        var cartItems = await cartStore.GetItemsAsync(customerId);
-
-        if (cartItems.Count == 0)
-            return Results.Ok(new CartSummaryResponse([], 0));
-
         try
         {
+            var cartItems = await cartStore.GetItemsAsync(customerId);
+            if (cartItems.Count == 0)
+                return Results.Ok(new CartSummaryResponse([], 0));
+
             var items = cartItems
                 .Select(cartItem => new CartItemResponse(cartItem.ProductId, cartItem.Quantity))
                 .ToList();
@@ -58,8 +56,7 @@ public static class CartEndpoints
     private static async Task<IResult> AddItem(
         CartItemRequest request,
         ClaimsPrincipal user,
-        ICartStore cartStore,
-        CancellationToken cancellationToken)
+        ICartStore cartStore)
     {
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
@@ -68,16 +65,14 @@ public static class CartEndpoints
             cartStore,
             customerId,
             request.ProductId,
-            request.Quantity,
-            cancellationToken);
+            request.Quantity);
     }
 
     private static async Task<IResult> UpdateItem(
         Guid productId,
         CartItemRequest request,
         ClaimsPrincipal user,
-        ICartStore cartStore,
-        CancellationToken cancellationToken)
+        ICartStore cartStore)
     {
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
@@ -89,15 +84,13 @@ public static class CartEndpoints
             cartStore,
             customerId,
             productId,
-            request.Quantity,
-            cancellationToken);
+            request.Quantity);
     }
 
     private static async Task<IResult> RemoveItem(
         Guid productId,
         ClaimsPrincipal user,
-        ICartStore cartStore,
-        CancellationToken cancellationToken)
+        ICartStore cartStore)
     {
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
@@ -110,8 +103,7 @@ public static class CartEndpoints
 
     private static async Task<IResult> ClearCart(
         ClaimsPrincipal user,
-        ICartStore cartStore,
-        CancellationToken cancellationToken)
+        ICartStore cartStore)
     {
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
@@ -137,8 +129,7 @@ public static class CartEndpoints
         ICartStore cartStore,
         Guid customerId,
         Guid productId,
-        int quantity,
-        CancellationToken cancellationToken)
+        int quantity)
     {
         if (quantity <= 0)
             return Results.BadRequest("Số lượng phải lớn hơn 0.");
@@ -160,8 +151,7 @@ public static class CartEndpoints
         ICartStore cartStore,
         Guid customerId,
         Guid productId,
-        int quantity,
-        CancellationToken cancellationToken)
+        int quantity)
     {
         if (quantity <= 0)
             return Results.BadRequest("Số lượng phải lớn hơn 0.");

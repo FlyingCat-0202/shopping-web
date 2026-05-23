@@ -35,10 +35,6 @@ public static class PaymentEndpoints
         group.MapGet("/providers", GetPaymentProviders)
             .WithName("GetPaymentProviders");
 
-        // group.MapPost("/{id:guid}/confirm", ConfirmPayment)
-        //     .AddEndpointFilter<IdempotencyFilter>()
-        //     .WithName("ConfirmPayment");
-
         group.MapPost("/{id:guid}/providers/{provider}/checkout", CreateProviderCheckout)
             .AddEndpointFilter<IdempotencyFilter>()
             .WithName("CreateProviderCheckout");
@@ -72,8 +68,6 @@ public static class PaymentEndpoints
             .WithName("CompleteProviderCheckout");
     }
 
-
-
     private static async Task<IResult> GetPaymentByOrderId(
         Guid orderId,
         ClaimsPrincipal user,
@@ -103,42 +97,6 @@ public static class PaymentEndpoints
     private static IResult GetPaymentProviders(PaymentProviderCatalog providers)
         => Results.Ok(providers.GetAll());
 
-    // private static async Task<IResult> ConfirmPayment(
-    //     Guid id,
-    //     ClaimsPrincipal user,
-    //     PaymentDbContext db,
-    //     IPublishEndpoint publishEndpoint,
-    //     CancellationToken cancellationToken)
-    // {
-    //     if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
-    //         return Results.Unauthorized();
-
-    //     var payment = await db.Payments
-    //         .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
-
-    //     if (payment is null)
-    //         return Results.NotFound();
-
-    //     if (payment.CustomerId != customerId)
-    //         return Results.Forbid();
-
-    //     if (payment.Status == PaymentStatus.Succeeded)
-    //     {
-    //         await PublishSucceeded(publishEndpoint, payment, cancellationToken);
-    //         await db.SaveChangesAsync(cancellationToken);
-    //         return Results.Ok(ToPaymentResponse(payment));
-    //     }
-
-    //     if (payment.Status != PaymentStatus.Pending)
-    //         return Results.Conflict(new { message = $"Payment đang ở trạng thái {payment.Status}." });
-
-    //     payment.MarkSucceeded($"manual-{payment.Id:N}");
-    //     await PublishSucceeded(publishEndpoint, payment, cancellationToken);
-    //     await db.SaveChangesAsync(cancellationToken);
-
-    //     return Results.Ok(ToPaymentResponse(payment));
-    // }
-
     private static async Task<IResult> CreateProviderCheckout(
         Guid id,
         string provider,
@@ -148,11 +106,9 @@ public static class PaymentEndpoints
         PaymentProviderCatalog providers,
         CancellationToken cancellationToken)
     {
-        // ── Xác thực user và quyền truy cập ───────────────────────────────────────────────
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
 
-        // ── Tìm payment và provider ───────────────────────────────────────────────────────
         var paymentProvider = providers.FindByRoute(provider);
         if (paymentProvider is null)
             return Results.BadRequest(new { message = $"Provider {provider} không được hỗ trợ." });
@@ -166,7 +122,6 @@ public static class PaymentEndpoints
         if (payment.CustomerId != customerId)
             return Results.Forbid();
 
-        // ── Kiểm tra trạng thái payment ───────────────────────────────────────────────────────
         if (payment.Status != PaymentStatus.Pending)
             return Results.Conflict(new { message = $"Payment đang ở trạng thái {payment.Status}." });
 
@@ -226,10 +181,7 @@ public static class PaymentEndpoints
         if (payment is null)
             return Results.NotFound();
 
-        if (payment.Status == PaymentStatus.Succeeded)
-            return Results.Ok(ToPaymentResponse(payment));
-
-        if (payment.Status is PaymentStatus.Failed or PaymentStatus.Expired)
+        if (IsTerminal(payment))
             return Results.Ok(ToPaymentResponse(payment));
 
         var providerResult = paymentProvider.CompleteCheckout(payment, request);
@@ -291,34 +243,17 @@ public static class PaymentEndpoints
         if (payment is null)
             return Results.NotFound();
 
-        if (payment.Status == PaymentStatus.Succeeded)
-        {
-            await PublishSucceeded(publishEndpoint, payment, cancellationToken);
-            await db.SaveChangesAsync(cancellationToken);
-            return Results.Ok(ToPaymentResponse(payment));
-        }
+        if (IsTerminal(payment))
+            return await RepublishTerminalPayment(payment, db, publishEndpoint, cancellationToken);
 
-        if (payment.Status is PaymentStatus.Failed or PaymentStatus.Expired)
-        {
-            await PublishFailed(publishEndpoint, payment, cancellationToken);
-            await db.SaveChangesAsync(cancellationToken);
-            return Results.Ok(ToPaymentResponse(payment));
-        }
-
-        if (webhook.Success)
-        {
-            payment.MarkSucceeded(
-                string.IsNullOrWhiteSpace(webhook.ProviderTransactionId)
-                    ? $"webhook-{payment.Id:N}"
-                    : webhook.ProviderTransactionId.Trim());
-
-            await PublishSucceeded(publishEndpoint, payment, cancellationToken);
-        }
-        else
-        {
-            payment.MarkFailed(webhook.Reason ?? "Cổng thanh toán báo thất bại.");
-            await PublishFailed(publishEndpoint, payment, cancellationToken);
-        }
+        await ApplyPaymentResult(
+            payment,
+            webhook.Success,
+            webhook.ProviderTransactionId,
+            webhook.Reason ?? "Cổng thanh toán báo thất bại.",
+            $"webhook-{payment.Id:N}",
+            publishEndpoint,
+            cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -387,34 +322,17 @@ public static class PaymentEndpoints
         if (payment is null)
             return Results.NotFound();
 
-        if (payment.Status == PaymentStatus.Succeeded)
-        {
-            await PublishSucceeded(publishEndpoint, payment, cancellationToken);
-            await db.SaveChangesAsync(cancellationToken);
-            return Results.Ok(ToPaymentResponse(payment));
-        }
+        if (IsTerminal(payment))
+            return await RepublishTerminalPayment(payment, db, publishEndpoint, cancellationToken);
 
-        if (payment.Status is PaymentStatus.Failed or PaymentStatus.Expired)
-        {
-            await PublishFailed(publishEndpoint, payment, cancellationToken);
-            await db.SaveChangesAsync(cancellationToken);
-            return Results.Ok(ToPaymentResponse(payment));
-        }
-
-        if (request.Success)
-        {
-            payment.MarkSucceeded(
-                string.IsNullOrWhiteSpace(request.ProviderTransactionId)
-                    ? $"mock-webhook-{payment.Id:N}"
-                    : request.ProviderTransactionId.Trim());
-
-            await PublishSucceeded(publishEndpoint, payment, cancellationToken);
-        }
-        else
-        {
-            payment.MarkFailed(request.Reason ?? "Admin mock payment failure.");
-            await PublishFailed(publishEndpoint, payment, cancellationToken);
-        }
+        await ApplyPaymentResult(
+            payment,
+            request.Success,
+            request.ProviderTransactionId,
+            request.Reason ?? "Admin mock payment failure.",
+            $"mock-webhook-{payment.Id:N}",
+            publishEndpoint,
+            cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -456,12 +374,58 @@ public static class PaymentEndpoints
             payment.CreatedAt,
             payment.CompletedAt);
 
+    private static bool IsTerminal(PaymentTransaction payment)
+        => payment.Status is PaymentStatus.Succeeded or PaymentStatus.Failed or PaymentStatus.Expired;
+
+    private static async Task<IResult> RepublishTerminalPayment(
+        PaymentTransaction payment,
+        PaymentDbContext db,
+        IPublishEndpoint publishEndpoint,
+        CancellationToken cancellationToken)
+    {
+        await PublishCurrentPaymentState(publishEndpoint, payment, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToPaymentResponse(payment));
+    }
+
+    private static async Task ApplyPaymentResult(
+        PaymentTransaction payment,
+        bool success,
+        string? providerTransactionId,
+        string failureReason,
+        string defaultProviderTransactionId,
+        IPublishEndpoint publishEndpoint,
+        CancellationToken cancellationToken)
+    {
+        if (success)
+        {
+            payment.MarkSucceeded(NormalizeProviderTransactionId(providerTransactionId, defaultProviderTransactionId));
+            await PublishSucceeded(publishEndpoint, payment, cancellationToken);
+            return;
+        }
+
+        payment.MarkFailed(failureReason);
+        await PublishFailed(publishEndpoint, payment, cancellationToken);
+    }
+
+    private static string NormalizeProviderTransactionId(string? value, string fallback)
+        => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    private static Task PublishCurrentPaymentState(
+        IPublishEndpoint publishEndpoint,
+        PaymentTransaction payment,
+        CancellationToken cancellationToken)
+        => payment.Status == PaymentStatus.Succeeded
+            ? PublishSucceeded(publishEndpoint, payment, cancellationToken)
+            : PublishFailed(publishEndpoint, payment, cancellationToken);
+
     private static Task PublishSucceeded(
         IPublishEndpoint publishEndpoint,
         PaymentTransaction payment,
         CancellationToken cancellationToken)
         => publishEndpoint.Publish(new PaymentSucceededEvent
         {
+            CorrelationId = payment.OrderId,
             PaymentId = payment.Id,
             OrderId = payment.OrderId,
             CustomerId = payment.CustomerId,
@@ -476,6 +440,7 @@ public static class PaymentEndpoints
         CancellationToken cancellationToken)
         => publishEndpoint.Publish(new PaymentFailedEvent
         {
+            CorrelationId = payment.OrderId,
             PaymentId = payment.Id,
             OrderId = payment.OrderId,
             CustomerId = payment.CustomerId,

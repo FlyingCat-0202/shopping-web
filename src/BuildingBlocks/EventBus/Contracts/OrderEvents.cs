@@ -6,28 +6,20 @@ public class OrderItemInfo
     public int Quantity { get; set; }
 }
 
-public class OrderCreatedEvent
+public class OrderSubmittedEvent
 {
+    public Guid CorrelationId { get; set; }
     public Guid OrderId { get; set; }
     public Guid CustomerId { get; set; }
+    public string PaymentMethod { get; set; } = string.Empty;
     public List<OrderItemInfo> Items { get; set; } = [];
-}
-
-public class OrderCancelledEvent
-{
-    public Guid OrderId { get; set; }
-    public List<OrderItemInfo> Items { get; set; } = [];
-}
-
-public class OrderReturnedEvent
-{
-    public Guid OrderId { get; set; }
-    public List<OrderItemInfo> Items { get; set; } = [];
+    public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
 }
 
 public class OrderStatusChangedEvent
 {
     public Guid EventId { get; set; } = Guid.NewGuid();
+    public Guid CorrelationId { get; set; }
     public Guid OrderId { get; set; }
     public Guid CustomerId { get; set; }
     public string OldStatus { get; set; } = string.Empty;

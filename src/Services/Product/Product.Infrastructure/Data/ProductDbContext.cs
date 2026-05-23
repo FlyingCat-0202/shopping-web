@@ -71,10 +71,14 @@ public class ProductDbContext(DbContextOptions<ProductDbContext> options) : DbCo
                   .HasConversion<string>()
                   .HasMaxLength(30);
 
+            entity.Property(r => r.UnitPrice)
+                  .HasColumnType("decimal(18,2)");
+
             entity.Property(r => r.ReleaseReason)
                   .HasMaxLength(100);
 
             entity.ToTable(t => t.HasCheckConstraint("CK_StockReservations_Quantity", "\"Quantity\" > 0"));
+            entity.ToTable(t => t.HasCheckConstraint("CK_StockReservations_UnitPrice", "\"UnitPrice\" >= 0"));
 
             entity.HasIndex(r => new { r.OrderId, r.ProductId })
                   .IsUnique()

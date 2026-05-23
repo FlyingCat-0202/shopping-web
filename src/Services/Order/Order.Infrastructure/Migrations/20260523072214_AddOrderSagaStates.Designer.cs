@@ -2,22 +2,25 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using Product.Infrastructure.Data;
+using Order.Infrastructure.Data;
 
 #nullable disable
 
-namespace Product.Infrastructure.Migrations
+namespace Order.Infrastructure.Migrations
 {
-    [DbContext(typeof(ProductDbContext))]
-    partial class ProductDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(OrderDbContext))]
+    [Migration("20260523072214_AddOrderSagaStates")]
+    partial class AddOrderSagaStates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasDefaultSchema("product")
+                .HasDefaultSchema("order")
                 .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -67,7 +70,7 @@ namespace Product.Infrastructure.Migrations
 
                     b.HasIndex("Delivered");
 
-                    b.ToTable("InboxState", "product");
+                    b.ToTable("InboxState", "order");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
@@ -158,7 +161,7 @@ namespace Product.Infrastructure.Migrations
                     b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber")
                         .IsUnique();
 
-                    b.ToTable("OutboxMessage", "product");
+                    b.ToTable("OutboxMessage", "order");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxState", b =>
@@ -188,85 +191,48 @@ namespace Product.Infrastructure.Migrations
 
                     b.HasIndex("Created");
 
-                    b.ToTable("OutboxState", "product");
+                    b.ToTable("OutboxState", "order");
                 });
 
-            modelBuilder.Entity("Product.Domain.Entities.Category", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Categories_Name");
-
-                    b.ToTable("Categories", "product");
-                });
-
-            modelBuilder.Entity("Product.Domain.Entities.Product", b =>
+            modelBuilder.Entity("Order.Domain.Entities.Order", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("integer");
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ImageUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
+                    b.Property<string>("PaymentMethod")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.Property<int>("StockQuantity")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer");
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoryId")
-                        .HasDatabaseName("IX_Products_CategoryId");
+                    b.HasIndex("CustomerId", "OrderDate")
+                        .HasDatabaseName("IX_Orders_CustomerId_OrderDate");
 
-                    b.HasIndex("Name")
-                        .HasDatabaseName("IX_Products_Name");
+                    b.HasIndex("Status", "OrderDate")
+                        .HasDatabaseName("IX_Orders_Status_OrderDate");
 
-                    b.ToTable("Products", "product", t =>
+                    b.ToTable("Orders", "order", t =>
                         {
-                            t.HasCheckConstraint("CK_Products_Price", "\"Price\" >= 0");
-
-                            t.HasCheckConstraint("CK_Products_StockQuantity", "\"StockQuantity\" >= 0");
+                            t.HasCheckConstraint("CK_Orders_TotalAmount", "\"TotalAmount\" >= 0");
                         });
                 });
 
-            modelBuilder.Entity("Product.Domain.Entities.StockReservation", b =>
+            modelBuilder.Entity("Order.Domain.Entities.OrderDetail", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
@@ -276,41 +242,75 @@ namespace Product.Infrastructure.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
-                    b.Property<string>("ReleaseReason")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime?>("ReleasedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("ReservedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("decimal(18,2)");
 
-                    b.HasKey("Id");
+                    b.HasKey("OrderId", "ProductId");
 
-                    b.HasIndex("ProductId");
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("IX_OrderDetails_ProductId");
 
-                    b.HasIndex("OrderId", "ProductId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_StockReservations_OrderId_ProductId");
-
-                    b.HasIndex("Status", "ReservedAt")
-                        .HasDatabaseName("IX_StockReservations_Status_ReservedAt");
-
-                    b.ToTable("StockReservations", "product", t =>
+                    b.ToTable("OrderDetails", "order", t =>
                         {
-                            t.HasCheckConstraint("CK_StockReservations_Quantity", "\"Quantity\" > 0");
+                            t.HasCheckConstraint("CK_OrderDetails_Quantity", "\"Quantity\" > 0");
 
-                            t.HasCheckConstraint("CK_StockReservations_UnitPrice", "\"UnitPrice\" >= 0");
+                            t.HasCheckConstraint("CK_OrderDetails_UnitPrice", "\"UnitPrice\" >= 0");
                         });
+                });
+
+            modelBuilder.Entity("Order.Domain.Entities.OrderSagaState", b =>
+                {
+                    b.Property<Guid>("OrderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CurrentStep")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("PaymentCreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("StockReservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("OrderId");
+
+                    b.HasIndex("CurrentStep", "UpdatedAt")
+                        .HasDatabaseName("IX_OrderSagaStates_CurrentStep_UpdatedAt");
+
+                    b.HasIndex("IsCompleted", "UpdatedAt")
+                        .HasDatabaseName("IX_OrderSagaStates_IsCompleted_UpdatedAt");
+
+                    b.ToTable("OrderSagaStates", "order");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
@@ -325,26 +325,54 @@ namespace Product.Infrastructure.Migrations
                         .HasPrincipalKey("MessageId", "ConsumerId");
                 });
 
-            modelBuilder.Entity("Product.Domain.Entities.Product", b =>
+            modelBuilder.Entity("Order.Domain.Entities.Order", b =>
                 {
-                    b.HasOne("Product.Domain.Entities.Category", "Category")
-                        .WithMany()
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                    b.OwnsOne("Order.Domain.Entities.DeliveryInfo", "DeliveryDetails", b1 =>
+                        {
+                            b1.Property<Guid>("OrderId")
+                                .HasColumnType("uuid");
 
-                    b.Navigation("Category");
+                            b1.Property<string>("PhoneNumber")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("PhoneNumber");
+
+                            b1.Property<string>("ReceiverName")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("ReceiverName");
+
+                            b1.Property<string>("ShippingAddress")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("ShippingAddress");
+
+                            b1.HasKey("OrderId");
+
+                            b1.ToTable("Orders", "order");
+
+                            b1.WithOwner()
+                                .HasForeignKey("OrderId");
+                        });
+
+                    b.Navigation("DeliveryDetails")
+                        .IsRequired();
                 });
 
-            modelBuilder.Entity("Product.Domain.Entities.StockReservation", b =>
+            modelBuilder.Entity("Order.Domain.Entities.OrderDetail", b =>
                 {
-                    b.HasOne("Product.Domain.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                    b.HasOne("Order.Domain.Entities.Order", "Order")
+                        .WithMany("Items")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Product");
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("Order.Domain.Entities.Order", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

@@ -13,9 +13,8 @@ namespace Order.API.Endpoints;
 
 public static class OrderEndpoints
 {
-    private const string OrderCreatedRoutingKey = "order-created";
-    private const string OrderCancelledRoutingKey = "order-cancelled";
-    private const string OrderReturnedRoutingKey = "order-returned";
+    private const string OrderSubmittedRoutingKey = "order-submitted";
+    private const string ReleaseStockRoutingKey = "release-stock";
     private const string OrderStatusChangedRoutingKey = "order-status-changed";
 
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)
@@ -68,11 +67,12 @@ public static class OrderEndpoints
         ILogger<OrderEntity> logger,
         CancellationToken cancellationToken)
     {
-        // ── Validation & Authorization ───────────────────────────────────────────────
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
-        
-        // ── Grouping Items by ProductId ───────────────────────────────────────────────
+
+        if (!Enum.TryParse<PaymentMethodType>(request.PaymentMethod, true, out var paymentMethod))
+            return Results.BadRequest(new { message = "Phương thức thanh toán không hợp lệ." });
+
         var items = request.Items
             .GroupBy(i => i.ProductId)
             .Select(g => new OrderItemGrouping(g.Key, g.Sum(x => x.Quantity)))
@@ -80,10 +80,9 @@ public static class OrderEndpoints
 
         try
         {
-            // ── Creating Order Entity ───────────────────────────────────────────────
             var order = OrderEntity.Create(
                 customerId,
-                Enum.Parse<PaymentMethodType>(request.PaymentMethod, true),
+                paymentMethod,
                 request.ReceiverName, request.PhoneNumber, request.ShippingAddress);
 
             foreach (var item in items)
@@ -91,14 +90,14 @@ public static class OrderEndpoints
 
             db.Orders.Add(order);
 
-            // ── Publishing OrderCreated Event ───────────────────────────────────────────────
-
-            await publishEndpoint.Publish(new OrderCreatedEvent
+            await publishEndpoint.Publish(new OrderSubmittedEvent
             {
+                CorrelationId = order.Id,
                 OrderId = order.Id,
                 CustomerId = customerId,
+                PaymentMethod = order.PaymentMethod.ToString(),
                 Items = [.. items.Select(i => new OrderItemInfo { ProductId = i.ProductId, Quantity = i.Quantity })]
-            }, ctx => ctx.SetRoutingKey(OrderCreatedRoutingKey), cancellationToken);
+            }, ctx => ctx.SetRoutingKey(OrderSubmittedRoutingKey), cancellationToken);
             
             await db.SaveChangesAsync(cancellationToken);
             return Results.Accepted($"/api/order/{order.Id}", new { Message = "Đơn hàng đang được xử lý", OrderId = order.Id });
@@ -199,13 +198,13 @@ public static class OrderEndpoints
             .FirstOrDefaultAsync(o => o.Id == id && o.CustomerId == customerId, cancellationToken);
         if (order == null) return Results.NotFound();
 
-        var oldStatus = order.Status;
-        try { order.Cancel(); }
-        catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        if (!TryApplyStatusChange(order, order.Cancel, out var oldStatus, out var conflict))
+            return conflict!;
 
-        var items = order.Items.Select(od => new OrderItemInfo { ProductId = od.ProductId, Quantity = od.Quantity }).ToList();
-        await publishEndpoint.Publish(new OrderCancelledEvent { OrderId = order.Id, Items = items },
-            ctx => ctx.SetRoutingKey(OrderCancelledRoutingKey),
+        await PublishReleaseStock(
+            publishEndpoint,
+            order,
+            "Customer cancelled order.",
             cancellationToken);
         await PublishOrderStatusChanged(
             publishEndpoint,
@@ -231,9 +230,8 @@ public static class OrderEndpoints
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id && o.CustomerId == customerId, cancellationToken);
         if (order == null) return Results.NotFound();
 
-        var oldStatus = order.Status;
-        try { order.RequestReturn(); }
-        catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        if (!TryApplyStatusChange(order, order.RequestReturn, out var oldStatus, out var conflict))
+            return conflict!;
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -300,13 +298,13 @@ public static class OrderEndpoints
         var order = await db.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order == null) return Results.NotFound();
 
-        var oldStatus = order.Status;
-        try { order.ApproveReturn(); }
-        catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        if (!TryApplyStatusChange(order, order.ApproveReturn, out var oldStatus, out var conflict))
+            return conflict!;
 
-        var items = order.Items.Select(od => new OrderItemInfo { ProductId = od.ProductId, Quantity = od.Quantity }).ToList();
-        await publishEndpoint.Publish(new OrderReturnedEvent { OrderId = order.Id, Items = items },
-            ctx => ctx.SetRoutingKey(OrderReturnedRoutingKey),
+        await PublishReleaseStock(
+            publishEndpoint,
+            order,
+            "Admin approved return.",
             cancellationToken);
         await PublishOrderStatusChanged(
             publishEndpoint,
@@ -327,9 +325,8 @@ public static class OrderEndpoints
     {
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order == null) return Results.NotFound();
-        var oldStatus = order.Status;
-        try { order.RejectReturn(); }
-        catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        if (!TryApplyStatusChange(order, order.RejectReturn, out var oldStatus, out var conflict))
+            return conflict!;
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -348,9 +345,8 @@ public static class OrderEndpoints
     {
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order == null) return Results.NotFound();
-        var oldStatus = order.Status;
-        try { order.Ship(); }
-        catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        if (!TryApplyStatusChange(order, order.Ship, out var oldStatus, out var conflict))
+            return conflict!;
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -369,9 +365,8 @@ public static class OrderEndpoints
     {
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
         if (order == null) return Results.NotFound();
-        var oldStatus = order.Status;
-        try { order.Deliver(); }
-        catch (InvalidOperationException ex) { return Results.Conflict(new { message = ex.Message }); }
+        if (!TryApplyStatusChange(order, order.Deliver, out var oldStatus, out var conflict))
+            return conflict!;
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -390,10 +385,50 @@ public static class OrderEndpoints
         CancellationToken cancellationToken)
         => publishEndpoint.Publish(new OrderStatusChangedEvent
         {
+            CorrelationId = order.Id,
             OrderId = order.Id,
             CustomerId = order.CustomerId,
             OldStatus = oldStatus.ToString(),
             NewStatus = order.Status.ToString(),
             Reason = reason
         }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), cancellationToken);
+
+    private static Task PublishReleaseStock(
+        IPublishEndpoint publishEndpoint,
+        OrderEntity order,
+        string reason,
+        CancellationToken cancellationToken)
+        => publishEndpoint.Publish(new ReleaseStockCommand
+        {
+            CorrelationId = order.Id,
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            Reason = reason,
+            Items = [.. order.Items.Select(od => new OrderItemInfo
+            {
+                ProductId = od.ProductId,
+                Quantity = od.Quantity
+            })]
+        }, ctx => ctx.SetRoutingKey(ReleaseStockRoutingKey), cancellationToken);
+
+    private static bool TryApplyStatusChange(
+        OrderEntity order,
+        Action changeStatus,
+        out OrderStatus oldStatus,
+        out IResult? conflict)
+    {
+        oldStatus = order.Status;
+        conflict = null;
+
+        try
+        {
+            changeStatus();
+            return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            conflict = Results.Conflict(new { message = ex.Message });
+            return false;
+        }
+    }
 }

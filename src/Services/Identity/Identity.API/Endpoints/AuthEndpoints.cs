@@ -5,6 +5,7 @@ using System.Text;
 using Identity.API.Dtos;
 using Identity.Domain.Models;
 using EventBus.Contracts;
+using EventBus.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -188,7 +189,7 @@ public static class AuthEndpoints
             IdentityAppDbContext dbContext,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetCustomerId(principal, out var customerId))
+            if (!EndpointHelpers.TryGetCustomerId(principal, out var customerId))
             {
                 return Results.Unauthorized();
             }
@@ -218,7 +219,7 @@ public static class AuthEndpoints
             IdentityAppDbContext dbContext,
             CancellationToken cancellationToken) =>
         {
-            if (!TryGetCustomerId(principal, out var customerId))
+            if (!EndpointHelpers.TryGetCustomerId(principal, out var customerId))
             {
                 return Results.Unauthorized();
             }
@@ -289,12 +290,6 @@ public static class AuthEndpoints
         }
 
         return userAgent.Length <= 500 ? userAgent : userAgent[..500];
-    }
-
-    private static bool TryGetCustomerId(ClaimsPrincipal principal, out Guid customerId)
-    {
-        var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
-        return Guid.TryParse(userId, out customerId);
     }
 
     private static string CreateJwtToken(Customer user, IEnumerable<string> roles, IConfiguration configuration)

@@ -94,18 +94,14 @@ public static class NotificationEndpoints
         if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
             return Results.Unauthorized();
 
-        var notifications = await db.Notifications
+        var now = DateTime.UtcNow;
+        var markedCount = await db.Notifications
             .Where(n => n.CustomerId == customerId && !n.IsRead)
-            .ToListAsync(cancellationToken);
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(n => n.IsRead, true)
+                .SetProperty(n => n.ReadAt, now), cancellationToken);
 
-        foreach (var notification in notifications)
-        {
-            notification.MarkRead(DateTime.UtcNow);
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Results.Ok(new { markedCount = notifications.Count });
+        return Results.Ok(new { markedCount });
     }
 
     private static Task<IResult> GetAdminNotifications(

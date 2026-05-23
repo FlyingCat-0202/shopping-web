@@ -10,7 +10,7 @@ public class RedisCartStore(IConnectionMultiplexer redis) : ICartStore
     public async Task<List<CartStoreItem>> GetItemsAsync(Guid customerId)
     {
         var entries = await _database.HashGetAllAsync(CartKey(customerId));
-        await RefreshCartTtlAsync(customerId, entries.Select(e => e.Name.ToString()));
+        await RefreshCartTtlAsync(customerId);
 
         return entries
             .Select(e => new CartStoreItem(Guid.Parse(e.Name.ToString()), (int)e.Value))
@@ -32,7 +32,7 @@ public class RedisCartStore(IConnectionMultiplexer redis) : ICartStore
     public async Task UpsertItemAsync(Guid customerId, Guid productId, int quantity)
     {
         await _database.HashSetAsync(CartKey(customerId), productId.ToString(), quantity);
-        await RefreshCartTtlAsync(customerId, [productId.ToString()]);
+        await RefreshCartTtlAsync(customerId);
     }
 
     public async Task<bool> RemoveItemAsync(Guid customerId, Guid productId)
@@ -70,7 +70,7 @@ public class RedisCartStore(IConnectionMultiplexer redis) : ICartStore
         await _database.KeyDeleteAsync(CartKey(customerId));
     }
 
-    private async Task RefreshCartTtlAsync(Guid customerId, IEnumerable<string> productIds)
+    private async Task RefreshCartTtlAsync(Guid customerId)
     {
         await _database.KeyExpireAsync(CartKey(customerId), CartTtl);
     }

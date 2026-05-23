@@ -34,6 +34,7 @@ public class PaymentTimeoutService(IServiceProvider serviceProvider, ILogger<Pay
 
                     await publishEndpoint.Publish(new PaymentFailedEvent
                     {
+                        CorrelationId = payment.OrderId,
                         PaymentId = payment.Id,
                         OrderId = payment.OrderId,
                         CustomerId = payment.CustomerId,

@@ -4,10 +4,10 @@ using MassTransit;
 
 namespace Cart.API.IntegrationEvents.Consumers;
 
-public class CartItemsRemovedConsumer(ICartStore cartStore, ILogger<CartItemsRemovedConsumer> logger)
-    : IConsumer<CartItemsRemovedEvent>
+public class RemoveCartItemsConsumer(ICartStore cartStore, ILogger<RemoveCartItemsConsumer> logger)
+    : IConsumer<RemoveCartItemsCommand>
 {
-    public async Task Consume(ConsumeContext<CartItemsRemovedEvent> context)
+    public async Task Consume(ConsumeContext<RemoveCartItemsCommand> context)
     {
         try
         {

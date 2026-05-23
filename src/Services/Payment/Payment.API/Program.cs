@@ -69,17 +69,17 @@ builder.Services.AddMassTransit(x =>
         o.UseBusOutbox();
     });
 
-    x.AddConsumer<PaymentRequestedConsumer>();
+    x.AddConsumer<CreatePaymentConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.UseMessageRetry(r => r.Incremental(3, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
         cfg.Host(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://guest:guest@localhost:5672/"));
 
-        cfg.ReceiveEndpoint("payment-requested", e =>
+        cfg.ReceiveEndpoint("create-payment", e =>
         {
             e.UseEntityFrameworkOutbox<PaymentDbContext>(context);
-            e.ConfigureConsumer<PaymentRequestedConsumer>(context);
+            e.ConfigureConsumer<CreatePaymentConsumer>(context);
         });
     });
 });

@@ -38,4 +38,7 @@
     <Project Path="src\Services\Product\Product.Domain\Product.Domain.csproj" />
     <Project Path="src\Services\Product\Product.Infrastructure\Product.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/Order/">
+    <Project Path="tests\Order.FlowTests\Order.FlowTests.csproj" />
+  </Folder>
 </Solution>

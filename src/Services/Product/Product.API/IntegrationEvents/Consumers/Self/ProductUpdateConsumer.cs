@@ -18,44 +18,41 @@ public class ProductUpdateConsumer(ProductDbContext db, ILogger<ProductUpdateCon
 
         try
         {
-            // 1. Cập nhật tất cả các trường vào PostgreSQL (Dùng ExecuteUpdateAsync cho hiệu năng cực cao)
-            var affectedRow = await db.Products
-                .Where(p => p.Id == msg.Id)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(p => p.Name, msg.Name)
-                    .SetProperty(p => p.Price, msg.Price)
-                    .SetProperty(p => p.StockQuantity, msg.StockQuantity)
-                    .SetProperty(p => p.IsActive, msg.IsActive)
-                    .SetProperty(p => p.Description, msg.Description)
-                    .SetProperty(p => p.ImageUrl, msg.ImgUrl)
-                    .SetProperty(p => p.CategoryId, msg.CategoryId),
-                context.CancellationToken);
+            var product = await db.Products
+                .FirstOrDefaultAsync(p => p.Id == msg.Id, context.CancellationToken);
 
-            // Nếu không có dòng nào được update (sản phẩm có thể đã bị xóa trước đó) -> Dừng luôn
-            if (affectedRow == 0)
+            if (product is null)
             {
                 logger.LogWarning("Không tìm thấy sản phẩm {product_id} trong database để cập nhật", msg.Id);
                 return;
             }
 
-            // 2. Lấy Tên Category từ Database để chuẩn bị cho Elasticsearch
-            // (Chỉ Select đúng trường Name để tối ưu tốc độ)
             var categoryName = await db.Categories
                 .Where(c => c.Id == msg.CategoryId)
                 .Select(c => c.Name)
-                .FirstOrDefaultAsync(context.CancellationToken) ?? "";
+                .FirstOrDefaultAsync(context.CancellationToken);
 
-            // 3. Thiết lập data để bắn vào queue Elastic 
+            if (categoryName is null)
+                throw new InvalidOperationException($"Category {msg.CategoryId} không tồn tại.");
+
+            product.Name = msg.Name.Trim();
+            product.Price = msg.Price;
+            product.StockQuantity = msg.StockQuantity;
+            product.IsActive = msg.IsActive;
+            product.Description = string.IsNullOrWhiteSpace(msg.Description) ? null : msg.Description.Trim();
+            product.ImageUrl = string.IsNullOrWhiteSpace(msg.ImgUrl) ? null : msg.ImgUrl.Trim();
+            product.CategoryId = msg.CategoryId;
+
             var eventMsg = new ProductUpdatedEvent(
                 Id: msg.Id,
-                Name: msg.Name,
+                Name: product.Name,
                 Price: msg.Price,
                 IsActive: msg.IsActive,
                 CategoryName: categoryName
             );
 
-            // 4. Publish Event cho Consumer của Elastic hứng
             await pe.Publish(eventMsg, context.CancellationToken);
+            await db.SaveChangesAsync(context.CancellationToken);
 
             if (logger.IsEnabled(LogLevel.Information))
             {

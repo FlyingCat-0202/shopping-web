@@ -50,10 +50,13 @@ public class Order
         decimal total = 0;
         foreach (var item in _items)
         {
-            if (prices.TryGetValue(item.ProductId, out var price))
-                item.UpdateUnitPrice(price);
+            if (!prices.TryGetValue(item.ProductId, out var price))
+                throw new InvalidOperationException($"Thiếu giá đã xác thực cho sản phẩm {item.ProductId}.");
+
+            item.UpdateUnitPrice(price);
             total += item.UnitPrice * item.Quantity;
         }
+
         TotalAmount = total;
         Status = IsOnlinePayment() ? OrderStatus.PaymentPending : OrderStatus.Processing;
     }

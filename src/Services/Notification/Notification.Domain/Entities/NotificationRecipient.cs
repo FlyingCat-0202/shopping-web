@@ -26,21 +26,31 @@ public class NotificationRecipient
         var recipient = new NotificationRecipient
         {
             CustomerId = customerId,
-            CreatedAt = occurredAt == default ? DateTime.UtcNow : occurredAt
+            CreatedAt = NormalizeOccurredAt(occurredAt),
+            UpdatedAt = NormalizeOccurredAt(occurredAt)
         };
 
         recipient.UpdateContact(email, phoneNumber, fullName, occurredAt);
         return recipient;
     }
 
-    public void UpdateContact(string email, string? phoneNumber, string fullName, DateTime occurredAt)
+    public bool UpdateContact(string email, string? phoneNumber, string fullName, DateTime occurredAt)
     {
+        var eventTime = NormalizeOccurredAt(occurredAt);
+        if (eventTime < UpdatedAt)
+            return false;
+
         if (string.IsNullOrWhiteSpace(email))
             throw new InvalidOperationException("Email người nhận không được để trống.");
 
         Email = email.Trim().ToLowerInvariant();
         PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim();
         FullName = string.IsNullOrWhiteSpace(fullName) ? Email : fullName.Trim();
-        UpdatedAt = occurredAt == default ? DateTime.UtcNow : occurredAt;
+        UpdatedAt = eventTime;
+
+        return true;
     }
+
+    private static DateTime NormalizeOccurredAt(DateTime occurredAt)
+        => occurredAt == default ? DateTime.UtcNow : occurredAt;
 }

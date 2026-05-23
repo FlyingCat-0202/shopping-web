@@ -69,35 +69,17 @@ builder.Services.AddMassTransit(x =>
         o.UseBusOutbox();
     });
 
-    x.AddConsumer<StockReservedConsumer>();
-    x.AddConsumer<StockReservationFailedConsumer>();
-    x.AddConsumer<PaymentSucceededConsumer>();
-    x.AddConsumer<PaymentFailedConsumer>();
+    x.AddConsumer<OrderSagaConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.UseMessageRetry(r => r.Incremental(3, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
         cfg.Host(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://guest:guest@localhost:5672/"));
 
-        cfg.ReceiveEndpoint("stock-reserved", e =>
+        cfg.ReceiveEndpoint("order-saga", e =>
         {
             e.UseEntityFrameworkOutbox<OrderDbContext>(context);
-            e.ConfigureConsumer<StockReservedConsumer>(context);
-        });
-        cfg.ReceiveEndpoint("stock-reservation-failed", e =>
-        {
-            e.UseEntityFrameworkOutbox<OrderDbContext>(context);
-            e.ConfigureConsumer<StockReservationFailedConsumer>(context);
-        });
-        cfg.ReceiveEndpoint("payment-succeeded", e =>
-        {
-            e.UseEntityFrameworkOutbox<OrderDbContext>(context);
-            e.ConfigureConsumer<PaymentSucceededConsumer>(context);
-        });
-        cfg.ReceiveEndpoint("payment-failed", e =>
-        {
-            e.UseEntityFrameworkOutbox<OrderDbContext>(context);
-            e.ConfigureConsumer<PaymentFailedConsumer>(context);
+            e.ConfigureConsumer<OrderSagaConsumer>(context);
         });
     });
 });

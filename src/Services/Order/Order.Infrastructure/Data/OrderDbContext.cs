@@ -9,6 +9,7 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
 {
     public DbSet<OrderEntity> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
+    public DbSet<OrderSagaState> OrderSagaStates { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,6 +46,20 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
                   .WithMany(o => o.Items)
                   .HasForeignKey(od => od.OrderId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OrderSagaState>(entity =>
+        {
+            entity.ToTable("OrderSagaStates", "order");
+            entity.HasKey(s => s.OrderId);
+            entity.Property(s => s.CurrentStep).HasMaxLength(80);
+            entity.Property(s => s.PaymentMethod).HasMaxLength(50);
+            entity.Property(s => s.FailureReason).HasMaxLength(500);
+            entity.Property(s => s.TotalAmount).HasColumnType("decimal(18,2)");
+            entity.HasIndex(s => new { s.CurrentStep, s.UpdatedAt })
+                  .HasDatabaseName("IX_OrderSagaStates_CurrentStep_UpdatedAt");
+            entity.HasIndex(s => new { s.IsCompleted, s.UpdatedAt })
+                  .HasDatabaseName("IX_OrderSagaStates_IsCompleted_UpdatedAt");
         });
 
         // MassTransit Outbox

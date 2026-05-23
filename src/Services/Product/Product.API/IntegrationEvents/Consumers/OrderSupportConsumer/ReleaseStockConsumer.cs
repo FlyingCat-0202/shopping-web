@@ -5,39 +5,44 @@ using Product.Infrastructure.Data;
 
 namespace Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 
-public class OrderCancelledConsumer(
+public class ReleaseStockConsumer(
     ProductDbContext dbContext,
     IStockReservationService stockReservationService,
-    ILogger<OrderCancelledConsumer> logger) : IConsumer<OrderCancelledEvent>
+    ILogger<ReleaseStockConsumer> logger) : IConsumer<ReleaseStockCommand>
 {
-    public async Task Consume(ConsumeContext<OrderCancelledEvent> context)
+    public async Task Consume(ConsumeContext<ReleaseStockCommand> context)
     {
         var message = context.Message;
+
         try
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Nhận yêu cầu hoàn kho cho đơn hàng đã hủy {OrderId}", message.OrderId);
+                logger.LogInformation("Nhận lệnh hoàn kho cho Order {OrderId}: {Reason}", message.OrderId, message.Reason);
             }
 
-            if (message.Items == null || message.Items.Count == 0)
-            {
-                logger.LogWarning("Đơn hàng {OrderId} không có sản phẩm để hoàn kho.", message.OrderId);
-                return;
-            }
-            
-            // ── Hoàn kho cho các sản phẩm trong đơn hàng ───────────────────────
             var releasedCount = await stockReservationService.ReleaseReservedStockAsync(
                 message.OrderId,
                 message.Items,
-                "Cancelled",
+                message.Reason,
                 context.CancellationToken);
+
+            await context.Publish(new StockReleasedEvent
+            {
+                CorrelationId = message.CorrelationId,
+                OrderId = message.OrderId,
+                CustomerId = message.CustomerId,
+                Reason = message.Reason
+            }, context.CancellationToken);
 
             await dbContext.SaveChangesAsync(context.CancellationToken);
 
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Hoàn kho {ReleasedCount} reservation cho Order {OrderId}", releasedCount, message.OrderId);
+                logger.LogInformation(
+                    "Hoàn kho {ReleasedCount} reservation cho Order {OrderId}",
+                    releasedCount,
+                    message.OrderId);
             }
         }
         catch (DbUpdateConcurrencyException)

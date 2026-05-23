@@ -33,11 +33,21 @@ public class CustomerProfileChangedConsumer(
             }
             else
             {
-                recipient.UpdateContact(
+                var updated = recipient.UpdateContact(
                     message.Email,
                     message.PhoneNumber,
                     message.FullName,
                     message.OccurredAt);
+
+                if (!updated)
+                {
+                    logger.LogInformation(
+                        "Bỏ qua CustomerProfileChangedEvent cũ cho customer {CustomerId}. Event time: {OccurredAt}, current recipient time: {UpdatedAt}.",
+                        message.CustomerId,
+                        message.OccurredAt,
+                        recipient.UpdatedAt);
+                    return;
+                }
             }
 
             await dbContext.SaveChangesAsync(context.CancellationToken);

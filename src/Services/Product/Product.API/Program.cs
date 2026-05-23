@@ -82,9 +82,8 @@ builder.Services.AddMassTransit(x =>
         o.UseBusOutbox();
     });
 
-    x.AddConsumer<OrderCreatedConsumer>();
-    x.AddConsumer<OrderCancelledConsumer>();
-    x.AddConsumer<OrderReturnedConsumer>();
+    x.AddConsumer<ReserveStockConsumer>();
+    x.AddConsumer<ReleaseStockConsumer>();
     x.AddConsumer<ProductCreationConsumer>();
     x.AddConsumer<ProductDeleteConsumer>();
     x.AddConsumer<ProductUpdateConsumer>();
@@ -95,22 +94,16 @@ builder.Services.AddMassTransit(x =>
         cfg.UseMessageRetry(r => r.Incremental(3, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
         cfg.Host(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://guest:guest@localhost:5672/"));
 
-        cfg.ReceiveEndpoint("order-created", e =>
+        cfg.ReceiveEndpoint("reserve-stock", e =>
         {
             e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<OrderCreatedConsumer>(context);
+            e.ConfigureConsumer<ReserveStockConsumer>(context);
         });
 
-        cfg.ReceiveEndpoint("order-cancelled", e =>
+        cfg.ReceiveEndpoint("release-stock", e =>
         {
             e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<OrderCancelledConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("order-returned", e =>
-        {
-            e.UseEntityFrameworkOutbox<ProductDbContext>(context);
-            e.ConfigureConsumer<OrderReturnedConsumer>(context);
+            e.ConfigureConsumer<ReleaseStockConsumer>(context);
         });
 
         cfg.ReceiveEndpoint("product-creation", e =>

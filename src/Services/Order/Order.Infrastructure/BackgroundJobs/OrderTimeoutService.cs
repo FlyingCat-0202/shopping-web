@@ -1,3 +1,5 @@
+using EventBus.Contracts;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -10,6 +12,8 @@ namespace Order.Infrastructure.BackgroundJobs;
 public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<OrderTimeoutService> logger)
     : BackgroundService
 {
+    private const string OrderStatusChangedRoutingKey = "order-status-changed";
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -18,6 +22,7 @@ public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<Order
             {
                 using var scope = serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+                var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
 
                 var timeoutThreshold = DateTime.UtcNow.AddMinutes(-15);
                 var expiredOrders = await dbContext.Orders
@@ -30,9 +35,22 @@ public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<Order
                 {
                     foreach (var order in expiredOrders)
                     {
+                        var oldStatus = order.Status;
                         order.CancelDueToStockFailure();
+
+                        await publishEndpoint.Publish(new OrderStatusChangedEvent
+                        {
+                            CorrelationId = order.Id,
+                            OrderId = order.Id,
+                            CustomerId = order.CustomerId,
+                            OldStatus = oldStatus.ToString(),
+                            NewStatus = order.Status.ToString(),
+                            Reason = "Order timeout while waiting for stock reservation."
+                        }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), stoppingToken);
+
                         logger.LogWarning("Order {OrderId} đã bị hủy tự động do quá thời gian chờ giữ kho", order.Id);
                     }
+
                     await dbContext.SaveChangesAsync(stoppingToken);
                 }
             }
