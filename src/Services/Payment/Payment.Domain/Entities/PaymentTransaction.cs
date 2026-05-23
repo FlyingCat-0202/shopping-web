@@ -41,6 +41,18 @@ public class PaymentTransaction
         };
     }
 
+    public static PaymentTransaction CreateFailed(
+        Guid orderId,
+        Guid customerId,
+        decimal amount,
+        string paymentMethod,
+        string reason)
+    {
+        var payment = Create(orderId, customerId, amount, paymentMethod);
+        payment.MarkFailed(reason);
+        return payment;
+    }
+
     public void MarkSucceeded(string providerTransactionId)
     {
         if (Status == PaymentStatus.Succeeded)

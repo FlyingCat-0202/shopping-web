@@ -1,0 +1,647 @@
+<header class="site-hero">
+  <nav class="topbar" aria-label="Primary navigation">
+    <a class="brand" href="#" aria-label="Sech-Team home">
+      <svg viewBox="0 0 96 72" role="img" aria-hidden="true">
+        <path d="M16 14h50l14 14-14 14H39L26 58H15l17-24h31l7-6-7-6H16Z" fill="currentColor" />
+        <path d="M28 58h48M34 64h35" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
+      </svg>
+      <span>Sech</span>
+      <small>Team</small>
+    </a>
+
+    <div class="nav-actions">
+      <button class="icon-button" type="button" aria-label="Notifications" (click)="openNotifications()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+          <path d="M10 21h4" />
+        </svg>
+        <span class="cart-count notification-count" [attr.data-visible]="unreadNotificationCount() > 0 ? 'true' : 'false'">
+          {{ unreadNotificationCount() }}
+        </span>
+      </button>
+      <button class="icon-button" type="button" aria-label="Account" (click)="openAccount()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 21a8 8 0 0 0-16 0" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      </button>
+      <button class="icon-button" type="button" aria-label="Open cart" (click)="openCart()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 7h12l-1 13H7L6 7Z" />
+          <path d="M9 7a3 3 0 0 1 6 0" />
+        </svg>
+        <span class="cart-count" [attr.data-visible]="cartCount() > 0 ? 'true' : 'false'">{{ cartCount() }}</span>
+      </button>
+    </div>
+  </nav>
+
+  <section class="hero-copy">
+    <h1>Sech-Team Store</h1>
+    <p>Curated products for everyday style and team energy.</p>
+  </section>
+</header>
+
+<main class="shop-shell">
+  <aside class="filters" aria-label="Product filters">
+    <div class="filters-title">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h16M7 12h10M10 17h4" />
+      </svg>
+      <span>Filters</span>
+    </div>
+
+    <section class="filter-section">
+      <h2>Category</h2>
+      <div class="chip-list">
+        <button
+          *ngFor="let chip of categoryChips(); trackBy: trackByValue"
+          class="chip"
+          [class.is-active]="selectedCategory() === chip.value"
+          type="button"
+          (click)="setCategory(chip.value)"
+        >
+          {{ chip.label }}
+        </button>
+      </div>
+    </section>
+
+    <section class="filter-section">
+      <h2>Availability</h2>
+      <div class="chip-list">
+        <button
+          *ngFor="let chip of stockChips; trackBy: trackByValue"
+          class="chip"
+          [class.is-active]="selectedStock() === chip.value"
+          type="button"
+          (click)="setStock(chip.value)"
+        >
+          {{ chip.label }}
+        </button>
+      </div>
+    </section>
+  </aside>
+
+  <section class="products-region" aria-label="Products">
+    <div class="catalog-toolbar">
+      <div class="catalog-summary">
+        <p>
+          <span>{{ visibleProducts().length }}</span> products
+          <span *ngIf="searchActive()"> / {{ searchTotal() }} search matches</span>
+          <span class="connection-state" [class.is-offline]="connectionState() === 'offline'">
+            - {{ connectionState() }}
+          </span>
+        </p>
+        <p *ngIf="searchActive()">Searching for "{{ searchAppliedKeyword() }}"</p>
+      </div>
+      <form class="search-form" (ngSubmit)="searchProducts()">
+        <label class="search-field">
+          <span>Search</span>
+          <input
+            name="searchKeyword"
+            type="search"
+            [ngModel]="searchKeyword()"
+            (ngModelChange)="searchKeyword.set($event)"
+            placeholder="Product, category, description"
+          />
+        </label>
+        <button class="secondary-button" type="submit" [disabled]="searchLoading()">
+          {{ searchLoading() ? 'Searching...' : 'Search' }}
+        </button>
+        <button class="secondary-button" *ngIf="searchActive()" type="button" (click)="clearSearch()">Clear</button>
+      </form>
+      <label>
+        Sort
+        <select [ngModel]="selectedSort()" (ngModelChange)="selectedSort.set($event)">
+          <option value="featured">Featured</option>
+          <option value="price-asc">Price low to high</option>
+          <option value="price-desc">Price high to low</option>
+          <option value="name">Name</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="product-grid" *ngIf="visibleProducts().length > 0; else emptyCatalog">
+      <article class="product-card" *ngFor="let product of visibleProducts(); trackBy: trackByProduct">
+        <div class="product-media">
+          <img [src]="product.imageUrl" [alt]="product.name" loading="lazy" />
+          <button
+            class="add-button is-visible"
+            type="button"
+            [disabled]="product.stockQuantity <= 0 || (auth() && cartQuantity(product.id) >= product.stockQuantity)"
+            (click)="addToCart(product)"
+          >
+            {{ addButtonText(product) }}
+          </button>
+        </div>
+        <div class="product-info">
+          <div>
+            <h3>{{ product.name }}</h3>
+            <p class="product-meta">{{ product.categoryName }} / {{ product.stockQuantity }} in stock</p>
+        </div>
+        <strong>{{ formatPrice(product.price) }}</strong>
+        <p class="product-description" *ngIf="product.description">{{ product.description }}</p>
+        <div class="product-admin-actions" *ngIf="isAdmin()">
+          <button class="secondary-button" type="button" (click)="startEditProduct(product)">Edit</button>
+          <button
+            class="danger-button"
+            type="button"
+            [disabled]="isDeletingProduct(product)"
+            (click)="deleteProduct(product)"
+          >
+            {{ isDeletingProduct(product) ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </div>
+      </article>
+    </div>
+
+    <ng-template #emptyCatalog>
+      <p class="empty-state" *ngIf="connectionState() === 'offline'">
+        Product API is not reachable. Check AppHost, Product.API, and API endpoint settings.
+      </p>
+      <p class="empty-state" *ngIf="connectionState() !== 'offline'">No products match the current filters.</p>
+    </ng-template>
+  </section>
+</main>
+
+<aside class="cart-drawer" aria-label="Shopping cart" [class.is-open]="activeDrawer() === 'cart'" (click)="closeDrawer()">
+  <div class="cart-panel" (click)="$event.stopPropagation()">
+    <div class="cart-heading">
+      <h2>Your pack</h2>
+      <button class="icon-button" type="button" aria-label="Close cart" (click)="closeDrawer()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="cart-items">
+      <p class="empty-state" *ngIf="!auth()">Login to sync your cart with Redis.</p>
+      <p class="empty-state" *ngIf="auth() && cartLines().length === 0">Your pack is empty.</p>
+
+      <div class="cart-line" *ngFor="let line of cartLines(); trackBy: trackByCartLine">
+        <img [src]="line.product.imageUrl" [alt]="line.product.name" />
+        <div>
+          <h3>{{ line.product.name }}</h3>
+          <p>{{ line.quantity }} x {{ formatPrice(line.product.price) }}</p>
+          <div class="quantity-controls">
+            <button class="quantity-button" type="button" (click)="updateCartItem(line.productId, line.quantity - 1)">-</button>
+            <span>{{ line.quantity }}</span>
+            <button
+              class="quantity-button"
+              type="button"
+              [disabled]="line.quantity >= line.product.stockQuantity"
+              (click)="updateCartItem(line.productId, line.quantity + 1)"
+            >
+              +
+            </button>
+            <button class="remove-button" type="button" (click)="removeCartItem(line.productId)">Remove</button>
+          </div>
+        </div>
+        <strong>{{ formatPrice(line.product.price * line.quantity) }}</strong>
+      </div>
+    </div>
+
+    <div class="cart-footer">
+      <div>
+        <span>Total</span>
+        <strong>{{ formatPrice(cartTotal()) }}</strong>
+      </div>
+      <button type="button" class="checkout-button" [disabled]="!auth() || cartCount() === 0" (click)="openCheckout()">
+        Checkout
+      </button>
+    </div>
+  </div>
+</aside>
+
+<aside class="cart-drawer" aria-label="Account" [class.is-open]="activeDrawer() === 'account'" (click)="closeDrawer()">
+  <div class="cart-panel account-panel" (click)="$event.stopPropagation()">
+    <div class="cart-heading">
+      <h2>Account</h2>
+      <button class="icon-button" type="button" aria-label="Close account" (click)="closeDrawer()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="account-body">
+      <section class="auth-section" *ngIf="!auth()">
+        <div class="auth-tabs">
+          <button class="tab-button" [class.is-active]="authTab() === 'login'" type="button" (click)="authTab.set('login')">
+            Login
+          </button>
+          <button class="tab-button" [class.is-active]="authTab() === 'register'" type="button" (click)="authTab.set('register')">
+            Register
+          </button>
+        </div>
+
+        <form class="stack-form" *ngIf="authTab() === 'login'" (ngSubmit)="login()">
+          <label>
+            Email or phone
+            <input name="emailOrPhone" autocomplete="username" [(ngModel)]="loginModel.emailOrPhone" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" [(ngModel)]="loginModel.password" required />
+          </label>
+          <button class="primary-button" type="submit">Login</button>
+        </form>
+
+        <form class="stack-form" *ngIf="authTab() === 'register'" (ngSubmit)="register()">
+          <label>
+            Full name
+            <input name="fullName" autocomplete="name" [(ngModel)]="registerModel.fullName" required />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" [(ngModel)]="registerModel.email" required />
+          </label>
+          <label>
+            Phone number
+            <input name="phoneNumber" placeholder="0912345678" [(ngModel)]="registerModel.phoneNumber" required />
+          </label>
+          <label>
+            Password
+            <input name="registerPassword" type="password" autocomplete="new-password" [(ngModel)]="registerModel.password" required />
+          </label>
+          <button class="primary-button" type="submit">Create account</button>
+        </form>
+      </section>
+
+      <section class="auth-section api-settings">
+        <h3>API endpoints</h3>
+        <form class="stack-form compact-form" (ngSubmit)="saveApiConfig()">
+          <label>
+            Identity API
+            <input name="identity" [(ngModel)]="apiModel.identity" required />
+          </label>
+          <label>
+            Product API
+            <input name="product" [(ngModel)]="apiModel.product" required />
+          </label>
+          <label>
+            Cart API
+            <input name="cart" [(ngModel)]="apiModel.cart" required />
+          </label>
+          <label>
+            Order API
+            <input name="order" [(ngModel)]="apiModel.order" required />
+          </label>
+          <label>
+            Payment API
+            <input name="payment" [(ngModel)]="apiModel.payment" required />
+          </label>
+          <label>
+            Notification API
+            <input name="notification" [(ngModel)]="apiModel.notification" required />
+          </label>
+          <button class="secondary-button" type="submit">Save endpoints</button>
+        </form>
+      </section>
+
+      <section class="auth-section" *ngIf="auth() as user">
+        <div class="profile-card">
+          <span>{{ user.role }}</span>
+          <strong>{{ user.fullName || user.email }}</strong>
+          <p>{{ user.email }}</p>
+        </div>
+        <div class="inline-actions">
+          <button class="secondary-button" type="button" (click)="loadOrders()">Reload orders</button>
+          <button class="secondary-button" type="button" (click)="logout()">Logout</button>
+        </div>
+        <div class="orders-list">
+          <p class="empty-state" *ngIf="orders().length === 0">No orders yet.</p>
+          <article class="order-card" *ngFor="let order of orders(); trackBy: trackByOrder">
+            <header>
+              <h4>#{{ shortId(order.id) }}</h4>
+              <strong>{{ formatPrice(order.totalAmount) }}</strong>
+            </header>
+            <span class="status-pill">{{ order.status }} / {{ order.paymentStatus }}</span>
+            <p *ngIf="paymentFor(order) as payment">
+              Payment {{ payment.status }} via {{ payment.paymentMethod }}
+            </p>
+            <p>{{ formatDate(order.orderDate) }}</p>
+            <p *ngIf="order.customerId">Customer {{ shortId(order.customerId) }}</p>
+            <div class="inline-actions">
+              <button
+                class="primary-button"
+                *ngIf="canConfirmPayment(order)"
+                type="button"
+                [disabled]="isConfirmingPayment(order)"
+                (click)="confirmPayment(order)"
+              >
+                {{ isConfirmingPayment(order) ? 'Opening...' : payButtonText(order) }}
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="!isAdmin() && order.canCancel"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'cancel')"
+                (click)="orderAction(order, 'cancel')"
+              >
+                {{ isOrderActionBusy(order, 'cancel') ? 'Cancelling...' : 'Cancel' }}
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="!isAdmin() && order.canReturn"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'returnRequest')"
+                (click)="orderAction(order, 'returnRequest')"
+              >
+                Request return
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="isAdmin() && order.status === 'Processing'"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'ship')"
+                (click)="orderAction(order, 'ship')"
+              >
+                Ship
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="isAdmin() && order.status === 'Shipped'"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'deliver')"
+                (click)="orderAction(order, 'deliver')"
+              >
+                Deliver
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="isAdmin() && order.status === 'ReturnRequested'"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'returnApprove')"
+                (click)="orderAction(order, 'returnApprove')"
+              >
+                Approve return
+              </button>
+              <button
+                class="danger-button"
+                *ngIf="isAdmin() && order.status === 'ReturnRequested'"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'returnReject')"
+                (click)="orderAction(order, 'returnReject')"
+              >
+                Reject return
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="auth-section" *ngIf="isAdmin()">
+        <h3>Admin tools</h3>
+        <section class="admin-payments">
+          <h4>Payments</h4>
+          <form class="stack-form compact-form" (ngSubmit)="loadAdminPayments()">
+            <label>
+              Status
+              <select name="paymentStatus" [(ngModel)]="paymentFilters.status">
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Succeeded">Succeeded</option>
+                <option value="Failed">Failed</option>
+                <option value="Expired">Expired</option>
+              </select>
+            </label>
+            <label>
+              Order ID
+              <input name="paymentOrderId" [(ngModel)]="paymentFilters.orderId" />
+            </label>
+            <label>
+              Customer ID
+              <input name="paymentCustomerId" [(ngModel)]="paymentFilters.customerId" />
+            </label>
+            <button class="secondary-button" type="submit" [disabled]="adminPaymentsLoading()">
+              {{ adminPaymentsLoading() ? 'Loading...' : 'Reload payments' }}
+            </button>
+          </form>
+
+          <div class="payments-list">
+            <p class="empty-state" *ngIf="adminPayments().length === 0">No payments found.</p>
+            <article class="payment-card" *ngFor="let payment of adminPayments(); trackBy: trackByPayment">
+              <header>
+                <h5>#{{ shortId(payment.id) }}</h5>
+                <strong>{{ formatPrice(payment.amount) }}</strong>
+              </header>
+              <span class="status-pill" [ngClass]="paymentStatusClass(payment.status)">
+                {{ payment.status }} / {{ payment.paymentMethod }}
+              </span>
+              <p>Order {{ shortId(payment.orderId) }}</p>
+              <p *ngIf="payment.customerId">Customer {{ shortId(payment.customerId) }}</p>
+              <p *ngIf="payment.providerTransactionId">Provider {{ payment.providerTransactionId }}</p>
+              <p *ngIf="payment.failureReason">{{ payment.failureReason }}</p>
+              <p>{{ formatDate(payment.createdAt) }}</p>
+              <div class="inline-actions" *ngIf="canMockPayment(payment)">
+                <button
+                  class="primary-button"
+                  type="button"
+                  [disabled]="isMockingPayment(payment, true)"
+                  (click)="mockPayment(payment, true)"
+                >
+                  {{ isMockingPayment(payment, true) ? 'Sending...' : 'Mock success' }}
+                </button>
+                <button
+                  class="danger-button"
+                  type="button"
+                  [disabled]="isMockingPayment(payment, false)"
+                  (click)="mockPayment(payment, false)"
+                >
+                  {{ isMockingPayment(payment, false) ? 'Sending...' : 'Mock fail' }}
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <form class="stack-form" (ngSubmit)="createCategory()">
+          <label>
+            Category name
+            <input name="categoryName" placeholder="Jackets" [(ngModel)]="categoryModel.name" required />
+          </label>
+          <label>
+            Description
+            <textarea name="categoryDescription" rows="2" [(ngModel)]="categoryModel.description"></textarea>
+          </label>
+          <button class="primary-button" type="submit">Create category</button>
+        </form>
+
+        <form class="stack-form product-admin-form" (ngSubmit)="createProduct()">
+          <label>
+            Product name
+            <input name="productName" [(ngModel)]="productModel.name" required />
+          </label>
+          <label>
+            Price
+            <input name="price" type="number" min="0.01" step="0.01" [(ngModel)]="productModel.price" required />
+          </label>
+          <label>
+            Stock
+            <input name="stockQuantity" type="number" min="0" step="1" [(ngModel)]="productModel.stockQuantity" required />
+          </label>
+          <label>
+            Category
+            <select name="productCategoryId" [(ngModel)]="productModel.categoryId" required>
+              <option *ngFor="let category of categories()" [ngValue]="category.id">{{ category.name }}</option>
+            </select>
+          </label>
+          <label>
+            Image URL
+            <input name="imageUrl" type="url" [(ngModel)]="productModel.imageUrl" />
+          </label>
+          <label>
+            Description
+            <textarea name="productDescription" rows="3" [(ngModel)]="productModel.description"></textarea>
+          </label>
+          <button class="primary-button" type="submit">Create product</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</aside>
+
+<aside class="cart-drawer" aria-label="Notifications" [class.is-open]="activeDrawer() === 'notifications'" (click)="closeDrawer()">
+  <div class="cart-panel notification-panel" (click)="$event.stopPropagation()">
+    <div class="cart-heading">
+      <div>
+        <h2>Notifications</h2>
+        <p class="panel-subtitle">{{ unreadNotificationCount() }} unread</p>
+      </div>
+      <button class="icon-button" type="button" aria-label="Close notifications" (click)="closeDrawer()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="notification-toolbar">
+      <button class="chip" type="button" [class.is-active]="!notificationUnreadOnly()" (click)="setNotificationUnreadOnly(false)">
+        All
+      </button>
+      <button class="chip" type="button" [class.is-active]="notificationUnreadOnly()" (click)="setNotificationUnreadOnly(true)">
+        Unread
+      </button>
+      <button
+        class="secondary-button"
+        type="button"
+        [disabled]="unreadNotificationCount() === 0 || isMarkingAllNotificationsRead()"
+        (click)="markAllNotificationsRead()"
+      >
+        {{ isMarkingAllNotificationsRead() ? 'Marking...' : 'Mark all read' }}
+      </button>
+    </div>
+
+    <div class="notification-list">
+      <p class="empty-state" *ngIf="notificationsLoading()">Loading notifications...</p>
+      <p class="empty-state" *ngIf="!notificationsLoading() && notifications().length === 0">No notifications yet.</p>
+
+      <article
+        class="notification-card"
+        *ngFor="let notification of notifications(); trackBy: trackByNotification"
+        [class.is-unread]="!notification.isRead"
+      >
+        <header>
+          <span class="status-pill" [ngClass]="notification.isRead ? '' : 'is-pending'">{{ notification.type }}</span>
+          <time>{{ formatDate(notification.createdAt) }}</time>
+        </header>
+        <h3>{{ notification.title }}</h3>
+        <p>{{ notification.message }}</p>
+        <button
+          class="secondary-button"
+          type="button"
+          *ngIf="!notification.isRead"
+          [disabled]="isNotificationBusy(notification)"
+          (click)="markNotificationRead(notification)"
+        >
+          {{ isNotificationBusy(notification) ? 'Saving...' : 'Mark read' }}
+        </button>
+      </article>
+    </div>
+  </div>
+</aside>
+<aside class="modal-layer" aria-label="Checkout" [class.is-open]="checkoutOpen()" (click)="closeCheckout()">
+  <form class="modal-card stack-form" (click)="$event.stopPropagation()" (ngSubmit)="checkout()">
+    <div class="modal-heading">
+      <h2>Checkout</h2>
+      <button class="icon-button" type="button" aria-label="Close checkout" (click)="closeCheckout()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <label>
+      Receiver name
+      <input name="receiverName" autocomplete="name" [(ngModel)]="checkoutModel.receiverName" required />
+    </label>
+    <label>
+      Phone number
+      <input name="phoneNumber" placeholder="0912345678" [(ngModel)]="checkoutModel.phoneNumber" required />
+    </label>
+    <label>
+      Shipping address
+      <textarea name="shippingAddress" rows="3" [(ngModel)]="checkoutModel.shippingAddress" required></textarea>
+    </label>
+    <label>
+      Payment method
+      <select name="paymentMethod" [(ngModel)]="checkoutModel.paymentMethod">
+        <option *ngFor="let method of paymentMethodOptions(); trackBy: trackByValue" [value]="method.value">
+          {{ method.label }}
+        </option>
+      </select>
+    </label>
+    <button class="primary-button" type="submit" [disabled]="checkoutBusy()">
+      {{ checkoutBusy() ? 'Placing...' : 'Place order' }}
+    </button>
+  </form>
+</aside>
+
+<aside class="modal-layer" aria-label="Product editor" [class.is-open]="productEditorOpen()" (click)="closeProductEditor()">
+  <form class="modal-card stack-form" (click)="$event.stopPropagation()" (ngSubmit)="updateProduct()">
+    <div class="modal-heading">
+      <h2>Edit product</h2>
+      <button class="icon-button" type="button" aria-label="Close product editor" (click)="closeProductEditor()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <label>
+      Product name
+      <input name="editProductName" [(ngModel)]="editProductModel.name" required />
+    </label>
+    <label>
+      Price
+      <input name="editPrice" type="number" min="0.01" step="0.01" [(ngModel)]="editProductModel.price" required />
+    </label>
+    <label>
+      Stock
+      <input name="editStockQuantity" type="number" min="0" step="1" [(ngModel)]="editProductModel.stockQuantity" required />
+    </label>
+    <label>
+      Category
+      <select name="editProductCategoryId" [(ngModel)]="editProductModel.categoryId" required>
+        <option *ngFor="let category of categories()" [ngValue]="category.id">{{ category.name }}</option>
+      </select>
+    </label>
+    <label>
+      Image URL
+      <input name="editImageUrl" type="url" [(ngModel)]="editProductModel.imageUrl" />
+    </label>
+    <label>
+      Description
+      <textarea name="editProductDescription" rows="3" [(ngModel)]="editProductModel.description"></textarea>
+    </label>
+    <label class="checkbox-row">
+      <input name="editIsActive" type="checkbox" [(ngModel)]="editProductModel.isActive" />
+      Active
+    </label>
+    <button class="primary-button" type="submit" [disabled]="productSaveBusy()">
+      {{ productSaveBusy() ? 'Saving...' : 'Save product' }}
+    </button>
+  </form>
+</aside>
+
+<div class="toast" [class.is-visible]="toast()" role="status" aria-live="polite">{{ toast() }}</div>

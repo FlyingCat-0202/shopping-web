@@ -78,7 +78,8 @@ public class OrderSagaConsumer(OrderDbContext dbContext, ILogger<OrderSagaConsum
             if (order.Status == OrderStatus.Cancelled)
             {
                 await PublishReleaseStockCommand(context, order, "Order was cancelled before stock reservation response arrived.");
-                saga.MoveTo(OrderSagaSteps.StockReleasePending);
+                if (!saga.IsCompleted)
+                    saga.MoveTo(OrderSagaSteps.StockReleasePending);
                 await dbContext.SaveChangesAsync(context.CancellationToken);
                 return;
             }
@@ -111,6 +112,9 @@ public class OrderSagaConsumer(OrderDbContext dbContext, ILogger<OrderSagaConsum
 
             if (order.Status == OrderStatus.PaymentPending && order.IsOnlinePayment())
             {
+                if (saga.CurrentStep == OrderSagaSteps.PaymentPending)
+                    return;
+
                 saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
                 await PublishCreatePaymentCommand(context, order);
                 await dbContext.SaveChangesAsync(context.CancellationToken);

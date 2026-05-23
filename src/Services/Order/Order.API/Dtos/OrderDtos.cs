@@ -28,5 +28,4 @@ public record OrderDetailResponse(Guid Id, DateTime OrderDate, decimal TotalAmou
     List<OrderItemResponse> Items);
 
 public record OrderItemResponse(Guid ProductId, int Quantity, decimal UnitPrice);
-public record OrderItemGrouping(Guid ProductId, int Quantity);
 public record PagedResult<T>(List<T> Items, int TotalCount, int PageIndex, int PageSize);

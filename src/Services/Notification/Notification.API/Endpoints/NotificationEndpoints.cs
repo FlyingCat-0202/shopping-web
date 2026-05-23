@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using EventBus.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Notification.API.Dtos;
 using Notification.Infrastructure.Data;
 
 namespace Notification.API.Endpoints;
@@ -174,20 +175,3 @@ public static class NotificationEndpoints
             notification.CreatedAt,
             notification.ReadAt);
 }
-
-public record NotificationPagedResult<T>(
-    IReadOnlyList<T> Items,
-    int TotalCount,
-    int PageIndex,
-    int PageSize);
-
-public record NotificationResponse(
-    Guid Id,
-    Guid CustomerId,
-    string Type,
-    string Title,
-    string Message,
-    string? DataJson,
-    bool IsRead,
-    DateTime CreatedAt,
-    DateTime? ReadAt);

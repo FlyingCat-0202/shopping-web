@@ -10,7 +10,11 @@ var tests = new (string Name, Action Run)[]
     ("Stock fail cancels order", StockFailCancelsOrder),
     ("Online payment success completes order", OnlinePaymentSuccessCompletesOrder),
     ("Online payment fail releases stock", OnlinePaymentFailReleasesStock),
-    ("COD success completes without payment", CodSuccessCompletesWithoutPayment)
+    ("COD success completes without payment", CodSuccessCompletesWithoutPayment),
+    ("Order timeout fails pending saga", OrderTimeoutFailsPendingSaga),
+    ("Manual online cancel waits for stock release", ManualOnlineCancelWaitsForStockRelease),
+    ("Payment success can complete before payment-created event", PaymentSuccessCanCompleteBeforePaymentCreatedEvent),
+    ("Saga rejects state regression", SagaRejectsStateRegression)
 };
 
 foreach (var test in tests)
@@ -120,6 +124,71 @@ static void CodSuccessCompletesWithoutPayment()
     AssertTrue(saga.IsCompleted, "Saga completed");
 }
 
+static void OrderTimeoutFailsPendingSaga()
+{
+    var order = CreateOrder(PaymentMethodType.MeiMei);
+    var saga = StartSaga(order);
+
+    order.CancelDueToStockFailure();
+    saga.Fail("Order timeout while waiting for stock reservation.");
+
+    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status");
+    AssertEqual(OrderSagaSteps.Failed, saga.CurrentStep, "Saga step");
+    AssertTrue(saga.IsCompleted, "Saga completed");
+}
+
+static void ManualOnlineCancelWaitsForStockRelease()
+{
+    var order = CreateOrder(PaymentMethodType.MeiMei);
+    var saga = StartSaga(order);
+
+    order.MarkStockReserved(PriceMap(order, 100_000m));
+    saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
+    saga.MoveTo(OrderSagaSteps.PaymentPending);
+
+    order.Cancel();
+    saga.MoveTo(OrderSagaSteps.StockReleasePending);
+
+    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status");
+    AssertEqual(OrderSagaSteps.StockReleasePending, saga.CurrentStep, "Saga step before stock release");
+    AssertFalse(saga.IsCompleted, "Saga completed before stock release");
+
+    saga.Fail("Customer cancelled order.");
+
+    AssertEqual(OrderSagaSteps.Failed, saga.CurrentStep, "Saga step after stock release");
+    AssertTrue(saga.IsCompleted, "Saga completed after stock release");
+}
+
+static void PaymentSuccessCanCompleteBeforePaymentCreatedEvent()
+{
+    var order = CreateOrder(PaymentMethodType.MeilyMeily);
+    var saga = StartSaga(order);
+
+    order.MarkStockReserved(PriceMap(order, 100_000m));
+    saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
+
+    order.ConfirmPayment();
+    saga.Complete();
+
+    AssertEqual(OrderStatus.Processing, order.Status, "Order status");
+    AssertEqual(OrderSagaSteps.Completed, saga.CurrentStep, "Saga step");
+    AssertTrue(saga.IsCompleted, "Saga completed");
+}
+
+static void SagaRejectsStateRegression()
+{
+    var order = CreateOrder(PaymentMethodType.MeiMei);
+    var saga = StartSaga(order);
+
+    order.MarkStockReserved(PriceMap(order, 100_000m));
+    saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
+    saga.MoveTo(OrderSagaSteps.PaymentPending);
+
+    AssertThrows<InvalidOperationException>(
+        () => saga.MoveTo(OrderSagaSteps.PaymentCreationPending),
+        "Saga should reject PaymentPending -> PaymentCreationPending");
+}
+
 static Order.Domain.Entities.Order CreateOrder(PaymentMethodType paymentMethod)
 {
     var order = Order.Domain.Entities.Order.Create(
@@ -155,6 +224,21 @@ static void AssertFalse(bool value, string name)
 {
     if (value)
         throw new InvalidOperationException($"{name}: expected false");
+}
+
+static void AssertThrows<TException>(Action action, string name)
+    where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException($"{name}: expected {typeof(TException).Name}");
 }
 
 static void AssertSequenceEqual<T>(IReadOnlyList<T> expected, IReadOnlyList<T> actual, string name)

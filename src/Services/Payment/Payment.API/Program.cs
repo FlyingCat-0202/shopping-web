@@ -70,6 +70,7 @@ builder.Services.AddMassTransit(x =>
     });
 
     x.AddConsumer<CreatePaymentConsumer>();
+    x.AddConsumer<CancelPaymentConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -80,6 +81,12 @@ builder.Services.AddMassTransit(x =>
         {
             e.UseEntityFrameworkOutbox<PaymentDbContext>(context);
             e.ConfigureConsumer<CreatePaymentConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("cancel-payment", e =>
+        {
+            e.UseEntityFrameworkOutbox<PaymentDbContext>(context);
+            e.ConfigureConsumer<CancelPaymentConsumer>(context);
         });
     });
 });

@@ -29,7 +29,7 @@ var paymentDb = postgres.AddDatabase("payment-db");
 var notificationDb = postgres.AddDatabase("notification-db");
 
 // ── Services ──────────────────────────────────────────────────────────────────
-builder.AddProject<Order_API>("order-api")
+var orderApi = builder.AddProject<Order_API>("order-api")
     .WithReference(orderDb)
     .WithReference(rabbitmq)
     .WithReference(redis)
@@ -37,13 +37,13 @@ builder.AddProject<Order_API>("order-api")
     .WaitFor(rabbitmq)
     .WaitFor(redis);
 
-builder.AddProject<Cart_API>("cart-api")
+var cartApi = builder.AddProject<Cart_API>("cart-api")
     .WithReference(rabbitmq)
     .WithReference(redis)
     .WaitFor(rabbitmq)
     .WaitFor(redis);
 
-builder.AddProject<Product_API>("product-api")
+var productApi = builder.AddProject<Product_API>("product-api")
     .WithReference(productDb)
     .WithReference(rabbitmq)
     .WithReference(redis)
@@ -53,7 +53,7 @@ builder.AddProject<Product_API>("product-api")
     .WaitFor(redis)
     .WaitFor(elasticsearch);      // <--- Đợi Elastic chạy xong mới start Product API
 
-builder.AddProject<Identity_API>("identity-api")
+var identityApi = builder.AddProject<Identity_API>("identity-api")
     .WithReference(identityDb)
     .WithReference(rabbitmq)
     .WithReference(redis)
@@ -61,7 +61,7 @@ builder.AddProject<Identity_API>("identity-api")
     .WaitFor(rabbitmq)
     .WaitFor(redis);
 
-builder.AddProject<Payment_API>("payment-api")
+var paymentApi = builder.AddProject<Payment_API>("payment-api")
     .WithReference(paymentDb)
     .WithReference(rabbitmq)
     .WithReference(redis)
@@ -69,12 +69,31 @@ builder.AddProject<Payment_API>("payment-api")
     .WaitFor(rabbitmq)
     .WaitFor(redis);
 
-builder.AddProject<Notification_API>("notification-api")
+var notificationApi = builder.AddProject<Notification_API>("notification-api")
     .WithReference(notificationDb)
     .WithReference(rabbitmq)
     .WithReference(redis)
     .WaitFor(notificationDb)
     .WaitFor(rabbitmq)
     .WaitFor(redis);
+
+builder.AddExecutable(
+        "web-store-angular",
+        "npm",
+        "../src/Web/web-store-angular",
+        "run",
+        "start",
+        "--",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "4200")
+    .WithHttpEndpoint(port: 4200, targetPort: 4200, name: "http", isProxied: false)
+    .WaitFor(identityApi)
+    .WaitFor(productApi)
+    .WaitFor(cartApi)
+    .WaitFor(orderApi)
+    .WaitFor(paymentApi)
+    .WaitFor(notificationApi);
 
 builder.Build().Run();

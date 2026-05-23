@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Order.Domain.Entities;
 using Order.Domain.Enums;
 using Order.Infrastructure.Data;
 
@@ -37,6 +38,19 @@ public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<Order
                     {
                         var oldStatus = order.Status;
                         order.CancelDueToStockFailure();
+                        var reason = "Order timeout while waiting for stock reservation.";
+
+                        var saga = await dbContext.OrderSagaStates
+                            .FirstOrDefaultAsync(s => s.OrderId == order.Id, stoppingToken);
+
+                        if (saga is null)
+                        {
+                            saga = OrderSagaState.Start(order.Id, order.CustomerId, order.PaymentMethod.ToString());
+                            dbContext.OrderSagaStates.Add(saga);
+                        }
+
+                        if (!saga.IsCompleted)
+                            saga.Fail(reason);
 
                         await publishEndpoint.Publish(new OrderStatusChangedEvent
                         {
@@ -45,7 +59,7 @@ public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<Order
                             CustomerId = order.CustomerId,
                             OldStatus = oldStatus.ToString(),
                             NewStatus = order.Status.ToString(),
-                            Reason = "Order timeout while waiting for stock reservation."
+                            Reason = reason
                         }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), stoppingToken);
 
                         logger.LogWarning("Order {OrderId} đã bị hủy tự động do quá thời gian chờ giữ kho", order.Id);

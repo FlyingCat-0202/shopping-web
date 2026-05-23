@@ -1,4 +1,4 @@
-﻿using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch;
 using EventBus.Contracts;
 using MassTransit;
 
@@ -14,22 +14,18 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
         var message = context.Message;
         try
         {
-            // Map từ Event sang Read Model (Document)
             var doc = new ProductEsDocument(
                 Id: message.Id,
                 Name: message.Name,
                 Price: message.Price,
                 CategoryName: message.CategoryName,
                 IsActive: message.IsActive,
-                // Map thêm Description, ImageUrl nếu có trong event
                 Description: "",
-                ImageUrl: ""
-            );
+                ImageUrl: "");
 
             var response = await e.IndexAsync(doc, idx => idx
                 .Index("products")
-                .Id(doc.Id)
-            );
+                .Id(doc.Id));
 
             if (!response.IsValidResponse)
                 throw new Exception($"Insert failed: {response.DebugInformation}");
@@ -39,7 +35,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
             if (logger.IsEnabled(LogLevel.Error))
                 logger.LogError(except, "Lỗi khi thêm sản phẩm mới {ProductId} vào Elastic docs", message.Id);
 
-            throw; // Bắt buộc phải throw để MassTransit tự động Retry hoặc đẩy vào Error Queue
+            throw;
         }
     }
 
@@ -66,7 +62,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
             if (logger.IsEnabled(LogLevel.Error))
                 logger.LogError(except, "Lỗi khi xóa sản phẩm {ProductId} khỏi Elastic docs", message.Id);
 
-            throw; // Ném lại lỗi cho MassTransit
+            throw;
         }
     }
 
@@ -75,7 +71,6 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
         var message = context.Message;
         try
         {
-            // Chỉ cập nhật các trường có thay đổi (Partial Update)
             var partialDoc = new
             {
                 Name = message.Name,
@@ -87,8 +82,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
             var response = await e.UpdateAsync<ProductEsDocument, object>(
                 "products",
                 message.Id,
-                u => u.Doc(partialDoc) // Partial update an toàn hơn
-            );
+                u => u.Doc(partialDoc));
 
             if (!response.IsValidResponse)
                 throw new Exception($"Update failed: {response.DebugInformation}");
@@ -98,7 +92,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
             if (logger.IsEnabled(LogLevel.Error))
                 logger.LogError(except, "Lỗi khi cập nhật sản phẩm {ProductId} vào Elastic docs", message.Id);
 
-            throw; // Ném lại lỗi cho MassTransit
+            throw;
         }
     }
 }

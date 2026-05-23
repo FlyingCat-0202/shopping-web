@@ -2,6 +2,7 @@ using EventBus.Contracts;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Payment.Domain.Entities;
+using Payment.Domain.Enums;
 using Payment.Infrastructure.Data;
 
 namespace Payment.API.IntegrationEvents.Consumers;
@@ -31,7 +32,7 @@ public class CreatePaymentConsumer(PaymentDbContext dbContext, ILogger<CreatePay
                     payment.OrderId,
                     payment.Id,
                     payment.Status);
-                await PublishPaymentCreated(context, payment);
+                await PublishCurrentPaymentState(context, payment);
                 await dbContext.SaveChangesAsync(context.CancellationToken);
                 return;
             }
@@ -78,4 +79,28 @@ public class CreatePaymentConsumer(PaymentDbContext dbContext, ILogger<CreatePay
             PaymentMethod = payment.PaymentMethod,
             Status = payment.Status.ToString()
         }, context.CancellationToken);
+
+    private static Task PublishCurrentPaymentState(ConsumeContext<CreatePaymentCommand> context, PaymentTransaction payment)
+        => payment.Status switch
+        {
+            PaymentStatus.Pending => PublishPaymentCreated(context, payment),
+            PaymentStatus.Succeeded => context.Publish(new PaymentSucceededEvent
+            {
+                CorrelationId = context.Message.CorrelationId,
+                PaymentId = payment.Id,
+                OrderId = payment.OrderId,
+                CustomerId = payment.CustomerId,
+                Amount = payment.Amount,
+                PaymentMethod = payment.PaymentMethod,
+                ProviderTransactionId = payment.ProviderTransactionId ?? string.Empty
+            }, context.CancellationToken),
+            _ => context.Publish(new PaymentFailedEvent
+            {
+                CorrelationId = context.Message.CorrelationId,
+                PaymentId = payment.Id,
+                OrderId = payment.OrderId,
+                CustomerId = payment.CustomerId,
+                Reason = payment.FailureReason ?? "Payment is no longer pending."
+            }, context.CancellationToken)
+        };
 }

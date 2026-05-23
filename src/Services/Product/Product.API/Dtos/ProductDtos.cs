@@ -10,7 +10,7 @@ public record ProductResponse(
     int CategoryId,
     string CategoryName);
 
-public record CategoryResponse(int Id, string Name, string? Description); // Response DTO for category details, including an optional description field to provide more information about the category
+public record CategoryResponse(int Id, string Name, string? Description);
 public record CategoryRequest(string Name, string? Description);
 public record ProductRequest(
     string Name,

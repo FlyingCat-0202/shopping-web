@@ -4,6 +4,7 @@ using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Order.API.Dtos;
 using EventBus.Extensions;
+using Order.Domain.Entities;
 using Order.Domain.Enums;
 using Order.Infrastructure.Data;
 using System.Security.Claims;
@@ -15,6 +16,7 @@ public static class OrderEndpoints
 {
     private const string OrderSubmittedRoutingKey = "order-submitted";
     private const string ReleaseStockRoutingKey = "release-stock";
+    private const string CancelPaymentRoutingKey = "cancel-payment";
     private const string OrderStatusChangedRoutingKey = "order-status-changed";
 
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)
@@ -201,16 +203,29 @@ public static class OrderEndpoints
         if (!TryApplyStatusChange(order, order.Cancel, out var oldStatus, out var conflict))
             return conflict!;
 
+        var reason = "Customer cancelled order.";
+        await MarkSagaCancellingAsync(db, order, oldStatus, reason, cancellationToken);
+
         await PublishReleaseStock(
             publishEndpoint,
             order,
-            "Customer cancelled order.",
+            reason,
             cancellationToken);
+
+        if (oldStatus == OrderStatus.PaymentPending && order.IsOnlinePayment())
+        {
+            await PublishCancelPayment(
+                publishEndpoint,
+                order,
+                reason,
+                cancellationToken);
+        }
+
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
             oldStatus,
-            "Customer cancelled order.",
+            reason,
             cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
@@ -411,6 +426,47 @@ public static class OrderEndpoints
             })]
         }, ctx => ctx.SetRoutingKey(ReleaseStockRoutingKey), cancellationToken);
 
+    private static Task PublishCancelPayment(
+        IPublishEndpoint publishEndpoint,
+        OrderEntity order,
+        string reason,
+        CancellationToken cancellationToken)
+        => publishEndpoint.Publish(new CancelPaymentCommand
+        {
+            CorrelationId = order.Id,
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            Amount = order.TotalAmount,
+            PaymentMethod = order.PaymentMethod.ToString(),
+            Reason = reason
+        }, ctx => ctx.SetRoutingKey(CancelPaymentRoutingKey), cancellationToken);
+
+    private static async Task MarkSagaCancellingAsync(
+        OrderDbContext db,
+        OrderEntity order,
+        OrderStatus oldStatus,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        if (oldStatus != OrderStatus.PaymentPending || !order.IsOnlinePayment())
+            return;
+
+        var saga = await db.OrderSagaStates
+            .FirstOrDefaultAsync(s => s.OrderId == order.Id, cancellationToken);
+
+        if (saga is null)
+        {
+            saga = OrderSagaState.Start(order.Id, order.CustomerId, order.PaymentMethod.ToString());
+            db.OrderSagaStates.Add(saga);
+        }
+
+        if (saga.IsCompleted)
+            return;
+
+        saga.FailureReason = reason;
+        saga.MoveTo(OrderSagaSteps.StockReleasePending);
+    }
+
     private static bool TryApplyStatusChange(
         OrderEntity order,
         Action changeStatus,
@@ -431,4 +487,6 @@ public static class OrderEndpoints
             return false;
         }
     }
+
+    private sealed record OrderItemGrouping(Guid ProductId, int Quantity);
 }

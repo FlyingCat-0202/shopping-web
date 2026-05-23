@@ -11,6 +11,18 @@ public class CreatePaymentCommand
     public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
 }
 
+public class CancelPaymentCommand
+{
+    public Guid CommandId { get; set; } = Guid.NewGuid();
+    public Guid CorrelationId { get; set; }
+    public Guid OrderId { get; set; }
+    public Guid CustomerId { get; set; }
+    public decimal Amount { get; set; }
+    public string PaymentMethod { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class PaymentCreatedEvent
 {
     public Guid EventId { get; set; } = Guid.NewGuid();

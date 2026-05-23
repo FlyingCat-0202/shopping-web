@@ -253,58 +253,66 @@ public static class ProductEndpoints
 
         group.MapGet("/search", async (
             [AsParameters] SearchProductRequest request,
-            ElasticsearchClient elasticClient, // Inject Client vào đây
+            ProductDbContext db,
+            ElasticsearchClient elasticClient,
+            ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
-            // Tính toán vị trí bỏ qua (cho phân trang)
-            var from = (request.Page - 1) * request.PageSize;
+            var page = Math.Max(request.Page, 1);
+            var pageSize = Math.Clamp(request.PageSize, 1, 50);
+            var keyword = request.Keyword?.Trim() ?? string.Empty;
+            var from = (page - 1) * pageSize;
 
-            // Gọi lệnh Search xuống Elasticsearch
-            var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s => s
-                .Indices("products")
-                .From(from)
-                .Size(request.PageSize)
-                .Query(q => q
-                    .Bool(b => b
-                        // 1. FILTER: Lọc bắt buộc (Chỉ lấy sản phẩm đang bán)
-                        .Filter(f => f
-                            .Term(t => t.Field(p => p.IsActive).Value(true))
-                        )
-                        // 2. MUST: Tìm kiếm Full-text
-                        .Must(m =>
-                        {
-                            if (string.IsNullOrWhiteSpace(request.Keyword))
-                            {
-                                // XÓA CHỮ RETURN: Gọi trực tiếp hàm để cấu hình
-                                m.MatchAll();
-                            }
-                            else
-                            {
-                                // XÓA CHỮ RETURN: Thêm khối else và gọi trực tiếp
-                                m.MultiMatch(mm => mm
-                                    .Query(request.Keyword)
-                                    .Fields(new[] { "name", "categoryName" })
-                                    .Fuzziness(new Fuzziness("AUTO"))
-                                );
-                            }
-                        })
-                    )
-                )
-            , cancellationToken);
-
-            if (!searchResponse.IsValidResponse)
+            try
             {
-                // Trả về chi tiết lỗi thật sự của Elasticsearch để dễ bắt bệnh
-                return Results.Problem($"Lỗi chi tiết: {searchResponse.DebugInformation}");
+                var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s => s
+                    .Indices("products")
+                    .From(from)
+                    .Size(pageSize)
+                    .Query(q => q
+                        .Bool(b => b
+                            .Filter(f => f
+                                .Term(t => t.Field(p => p.IsActive).Value(true))
+                            )
+                            .Must(m =>
+                            {
+                                if (string.IsNullOrWhiteSpace(keyword))
+                                {
+                                    m.MatchAll();
+                                }
+                                else
+                                {
+                                    m.MultiMatch(mm => mm
+                                        .Query(keyword)
+                                        .Fields(new[] { "name", "categoryName", "description" })
+                                        .Fuzziness(new Fuzziness("AUTO"))
+                                    );
+                                }
+                            })
+                        )
+                    )
+                , cancellationToken);
+
+                if (searchResponse.IsValidResponse)
+                {
+                    return Results.Ok(new
+                    {
+                        TotalItems = searchResponse.Total,
+                        CurrentPage = page,
+                        Items = searchResponse.Documents
+                    });
+                }
+
+                logger.LogWarning(
+                    "Elasticsearch search failed. Falling back to database search. Details: {DebugInformation}",
+                    searchResponse.DebugInformation);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Elasticsearch search threw an exception. Falling back to database search.");
             }
 
-            // Trả về kết quả cho Frontend
-            return Results.Ok(new
-            {
-                TotalItems = searchResponse.Total,
-                CurrentPage = request.Page,
-                Items = searchResponse.Documents // Đây chính là list ProductEsDocument
-            });
+            return await SearchProductsFromDatabase(db, keyword, page, pageSize, cancellationToken);
         });
 
         // API Seed Dữ liệu mẫu
@@ -337,5 +345,49 @@ public static class ProductEndpoints
         CancellationToken cancellationToken)
     {
         await publishEndpoint.Publish(msg!, cancellationToken);
+    }
+
+    private static async Task<IResult> SearchProductsFromDatabase(
+        ProductDbContext db,
+        string keyword,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = db.Products
+            .AsNoTracking()
+            .Where(p => p.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var pattern = $"%{keyword}%";
+            query = query.Where(p =>
+                EF.Functions.ILike(p.Name, pattern) ||
+                (p.Description != null && EF.Functions.ILike(p.Description, pattern)) ||
+                EF.Functions.ILike(p.Category.Name, pattern));
+        }
+
+        var totalItems = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderBy(p => p.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new ProductResponse(
+                p.Id,
+                p.Name,
+                p.Price,
+                p.StockQuantity,
+                p.Description,
+                p.ImageUrl,
+                p.CategoryId,
+                p.Category.Name))
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new
+        {
+            TotalItems = totalItems,
+            CurrentPage = page,
+            Items = items
+        });
     }
 }
