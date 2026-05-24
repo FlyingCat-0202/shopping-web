@@ -13,20 +13,12 @@ using ServiceDefault;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── DbContext ────────────────────────────────────────────────────────────────
-builder.Services.AddDbContext<PaymentDbContext>(options =>
+builder.AddNpgsqlDbContext<PaymentDbContext>("payment-db", configureDbContextOptions: options =>
 {
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("payment-db")
-            ?? builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=payment-db;Username=postgres;Password=postgres",
-        npgsql =>
-        {
-            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Payment", "payment");
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorCodesToAdd: null);
-        });
+    options.UseNpgsql(npgsql =>
+    {
+        npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Payment", "payment");
+    });
 });
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
@@ -92,9 +84,8 @@ builder.Services.AddMassTransit(x =>
 });
 
 // ── Redis Idempotency ────────────────────────────────────────────────────────
-var redisConnectionString = builder.Configuration.GetConnectionString("redis")
-    ?? throw new InvalidOperationException("Missing connection string for redis.");
-builder.Services.AddRedisIdempotency(redisConnectionString);
+builder.AddRedisClient("redis");
+builder.Services.AddRedisIdempotency();
 
 var app = builder.Build();
 

@@ -4,20 +4,73 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 namespace ServiceDefault;
 
 public static class ServiceDefaultExtensions
 {
     private const string FrontendCorsPolicy = "FrontendCors";
+    private const string HealthEndpointPath = "/health";
 
     public static WebApplicationBuilder AddApiServiceDefaults(this WebApplicationBuilder builder)
     {
+        builder.ConfigureOpenTelemetry();
         builder.Services.AddProblemDetails();
         builder.Services.AddHealthChecks();
         builder.Services.AddHttpLogging();
         builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
+
+        return builder;
+    }
+
+    private static WebApplicationBuilder ConfigureOpenTelemetry(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddLogging(loggingBuilder => loggingBuilder.AddOpenTelemetry());
+        builder.Services.Configure<OpenTelemetryLoggerOptions>(logging =>
+        {
+            logging.IncludeFormattedMessage = true;
+            logging.IncludeScopes = true;
+        });
+
+        builder.Services.AddOpenTelemetry()
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation();
+            })
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .AddSource(builder.Environment.ApplicationName)
+                    .AddSource("MassTransit")
+                    .AddAspNetCoreInstrumentation(options =>
+                    {
+                        options.Filter = context =>
+                            !context.Request.Path.StartsWithSegments(HealthEndpointPath);
+                    })
+                    .AddHttpClientInstrumentation();
+            });
+
+        builder.AddOpenTelemetryExporters();
+
+        return builder;
+    }
+
+    private static WebApplicationBuilder AddOpenTelemetryExporters(this WebApplicationBuilder builder)
+    {
+        if (string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+            return builder;
+
+        builder.Services.Configure<OpenTelemetryLoggerOptions>(logging => logging.AddOtlpExporter());
+        builder.Services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddOtlpExporter());
+        builder.Services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddOtlpExporter());
 
         return builder;
     }

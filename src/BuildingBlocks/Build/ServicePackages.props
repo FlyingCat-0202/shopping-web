@@ -5,9 +5,11 @@
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.3" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    <PackageReference Include="Aspire.StackExchange.Redis" Version="13.2.4" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Order.API' Or '$(MSBuildProjectName)' == 'Product.API' Or '$(MSBuildProjectName)' == 'Identity.API' Or '$(MSBuildProjectName)' == 'Payment.API' Or '$(MSBuildProjectName)' == 'Notification.API'">
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.2.2" />
     <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.3.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">

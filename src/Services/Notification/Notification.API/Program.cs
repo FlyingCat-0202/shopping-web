@@ -11,21 +11,12 @@ using ServiceDefault;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── DbContext ────────────────────────────────────────────────────────────────
-builder.Services.AddDbContext<NotificationDbContext>(options =>
+builder.AddNpgsqlDbContext<NotificationDbContext>("notification-db", configureDbContextOptions: options =>
 {
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("notification-db")
-            ?? builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Missing connection string. Set ConnectionStrings__notification-db or run the service through Aspire AppHost."),
-        npgsql =>
-        {
-            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Notification", "notification");
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorCodesToAdd: null);
-        });
+    options.UseNpgsql(npgsql =>
+    {
+        npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Notification", "notification");
+    });
 });
 
 // ── Infrastructure ───────────────────────────────────────────────────────────
@@ -87,10 +78,8 @@ builder.Services.AddMassTransit(x =>
 });
 
 // ── Redis Idempotency ────────────────────────────────────────────────────────
-var redisConnectionString = builder.Configuration.GetConnectionString("redis") ??
-                            builder.Configuration.GetConnectionString("DefaultConnection") ??
-                            throw new InvalidOperationException("Missing connection string for redis");
-builder.Services.AddRedisIdempotency(redisConnectionString);
+builder.AddRedisClient("redis");
+builder.Services.AddRedisIdempotency();
 
 var app = builder.Build();
 

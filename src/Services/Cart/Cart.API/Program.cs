@@ -54,10 +54,8 @@ builder.Services.AddMassTransit(x =>
 });
 
 // ── Add Redis ────────────────────────────────────────────────────────────────
-var redisConnectionString = builder.Configuration.GetConnectionString("redis") ??
-                            builder.Configuration.GetConnectionString("DefaultConnection") ??
-                            throw new InvalidOperationException("Missing connection string for redis");
-builder.Services.AddRedisIdempotency(redisConnectionString);
+builder.AddRedisClient("redis");
+builder.Services.AddRedisIdempotency();
 builder.Services.AddSingleton<ICartStore, RedisCartStore>();
 
 var app = builder.Build();

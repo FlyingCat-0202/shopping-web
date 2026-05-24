@@ -1,4 +1,5 @@
-﻿using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch.Mapping;
 
 namespace Product.API.IntegrationEvents.Consumers.Elastic;
 
@@ -31,14 +32,10 @@ public static class ElasticConfigurator
                             .Boolean(b => b.IsActive)
                             .Text(t => t.Description)
                             .Keyword(k => k.ImageUrl)
-
-                            // CÚ PHÁP ĐÚNG CHO DENSE VECTOR TRONG V8
-                            // Tham số 1: Trỏ đến thuộc tính
-                            // Tham số 2: Cấu hình chi tiết
                             .DenseVector(v => v.NameEmbeddingVector, d => d
                                 .Dims(368)
                                 .Index(true)
-                                .Similarity("cosine")
+                                .Similarity(DenseVectorSimilarity.Cosine)
                             )
                         )
                     )
