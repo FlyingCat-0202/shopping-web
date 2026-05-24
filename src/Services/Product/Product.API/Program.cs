@@ -1,3 +1,4 @@
+using Elastic.Clients.Elasticsearch;
 using EventBus.Extensions;
 using EventBus.Infrastructure;
 using FluentValidation;
@@ -8,11 +9,11 @@ using Product.API.Endpoints;
 using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
-using Product.API.Seed;
 using Product.API.Validators;
+using Product.Domain.Entities;
 using Product.Infrastructure.Data;
+using Product.Infrastructure.Gemini;
 using ServiceDefault;
-using Elastic.Clients.Elasticsearch;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -137,6 +138,8 @@ var redisConnectionString = builder.Configuration.GetConnectionString("redis") ?
                             throw new InvalidOperationException("Missing connection string for redis");
 builder.Services.AddRedisIdempotency(redisConnectionString);
 
+builder.Services.AddHttpClient<IAiEmbeddingService, GeminiEmbeddingService>();
+
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync<ProductDbContext>();
@@ -156,6 +159,15 @@ app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapHealthChecks("/health");
+
+using (var scope = app.Services.CreateScope())
+{
+    var elasticClient = scope.ServiceProvider.GetRequiredService<ElasticsearchClient>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    // Gọi hàm cấu hình
+    await ElasticConfigurator.SetupIndexAsync(elasticClient, logger);
+}
 app.MapProductEndpoints();
 
 app.Run();

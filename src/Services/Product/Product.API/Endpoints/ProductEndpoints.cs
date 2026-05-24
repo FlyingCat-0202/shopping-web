@@ -11,6 +11,7 @@ using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.Seed;
 using Product.Domain.Entities;
 using Product.Infrastructure.Data;
+using Product.Infrastructure.Gemini;
 
 namespace Product.API.Endpoints;
 
@@ -255,6 +256,7 @@ public static class ProductEndpoints
             [AsParameters] SearchProductRequest request,
             ProductDbContext db,
             ElasticsearchClient elasticClient,
+            IAiEmbeddingService _aiEmbeddingService,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
@@ -265,41 +267,71 @@ public static class ProductEndpoints
 
             try
             {
+                if (string.IsNullOrWhiteSpace(request.Keyword))
+                {
+                    // Tùy logic của bạn: Có thể báo lỗi BadRequest, hoặc trả về danh sách sản phẩm mặc định
+                    return Results.BadRequest("Từ khóa tìm kiếm không được để trống.");
+                }
+
+                // 1. Lấy vector của từ khóa từ AI Model (ví dụ: Gemini API)
+                float[] queryVector = await _aiEmbeddingService.GetVectorAsync(request.Keyword);
+
+                // 2. Thực hiện Hybrid Search
                 var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s => s
-                    .Indices("products")
-                    .From(from)
-                    .Size(pageSize)
-                    .Query(q => q
-                        .Bool(b => b
-                            .Filter(f => f
-                                .Term(t => t.Field(p => p.IsActive).Value(true))
+                .Indices("products")
+                .From(from)
+                .Size(request.PageSize)
+                .Query(q => q
+                    .Bool(b => b
+                        .Filter(f => f
+                            .Term(t => t.Field(p => p.IsActive).Value(true))
+                        )
+                        .Should(
+                            // Vector search
+                            sh1 => sh1.ScriptScore(ss => ss
+                                .Query(q2 => q2.MatchAll())
+                                .Script(new Script(new InlineScript(
+                                    "cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0")
+                                {
+                                    Params = new Dictionary<string, object>
+                                    {
+                                        { "queryVector", queryVector! }
+                                    }
+                                }))
+                            ),
+
+                            // BM25 text search
+                            sh2 => sh2.MultiMatch(mm => mm
+                                .Query(request.Keyword)
+                                .Fields(new[] { "name^3", "categoryName" })
+                                .Fuzziness(new Fuzziness("AUTO"))
                             )
-                            .Must(m =>
-                            {
-                                if (string.IsNullOrWhiteSpace(keyword))
-                                {
-                                    m.MatchAll();
-                                }
-                                else
-                                {
-                                    m.MultiMatch(mm => mm
-                                        .Query(keyword)
-                                        .Fields(new[] { "name", "categoryName", "description" })
-                                        .Fuzziness(new Fuzziness("AUTO"))
-                                    );
-                                }
-                            })
                         )
                     )
-                , cancellationToken);
+                ),
+                cancellationToken
+            );
 
                 if (searchResponse.IsValidResponse)
                 {
+                    // Map từ Document (ES) sang Response (DTO)
+                    var items = searchResponse.Documents.Select(doc => new ProductResponse(
+                        Id: doc.Id,
+                        Name: doc.Name,
+                        Price: doc.Price,
+                        StockQuantity: 0, // Lưu ý: Nếu bạn muốn hiển thị tồn kho, 
+                                          // ES document cần lưu field này, hoặc query DB để lấy thêm.
+                        Description: doc.Description,
+                        ImageUrl: doc.ImageUrl,
+                        CategoryId: 0, // Nếu ES không lưu CategoryId, bạn cần map lại hoặc lấy từ DB
+                        CategoryName: doc.CategoryName
+                    ));
+
                     return Results.Ok(new
                     {
                         TotalItems = searchResponse.Total,
                         CurrentPage = page,
-                        Items = searchResponse.Documents
+                        Items = items // Trả về danh sách đã được "lọc sạch" vector
                     });
                 }
 

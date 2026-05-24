@@ -7,4 +7,6 @@ public record ProductEsDocument(
     string CategoryName,
     bool IsActive,
     string? Description = null,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    float[]? NameEmbeddingVector = null
+);

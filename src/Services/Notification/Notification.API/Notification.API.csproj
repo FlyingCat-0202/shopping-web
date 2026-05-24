@@ -8,6 +8,10 @@
     <ProjectReference Include="..\..\..\..\ServiceDefault\ServiceDefault.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Properties\" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
