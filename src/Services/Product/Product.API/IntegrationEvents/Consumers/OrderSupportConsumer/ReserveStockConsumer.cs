@@ -90,7 +90,13 @@ public class ReserveStockConsumer(ProductDbContext dbContext, ILogger<ReserveSto
                 p.StockQuantity -= item.Quantity;
 
                 dbContext.StockReservations.Add(
-                    StockReservation.Create(message.OrderId, item.ProductId, item.Quantity, p.Price));
+                    StockReservation.Create(
+                        message.OrderId,
+                        item.ProductId,
+                        p.Name,
+                        p.ImageUrl,
+                        item.Quantity,
+                        p.Price));
             }
 
             await PublishStockReservedAsync(context, message, orderItems, productById);
@@ -155,6 +161,8 @@ public class ReserveStockConsumer(ProductDbContext dbContext, ILogger<ReserveSto
             Items = [.. orderItems.Select(i => new ValidatedOrderItem
             {
                 ProductId = i.ProductId,
+                ProductName = productById[i.ProductId].Name,
+                ProductImageUrl = productById[i.ProductId].ImageUrl,
                 Quantity = i.Quantity,
                 UnitPrice = productById[i.ProductId].Price
             })]
@@ -173,6 +181,8 @@ public class ReserveStockConsumer(ProductDbContext dbContext, ILogger<ReserveSto
             Items = [.. reservations.Select(r => new ValidatedOrderItem
             {
                 ProductId = r.ProductId,
+                ProductName = r.ProductName,
+                ProductImageUrl = r.ProductImageUrl,
                 Quantity = r.Quantity,
                 UnitPrice = r.UnitPrice
             })]

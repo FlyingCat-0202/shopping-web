@@ -41,7 +41,11 @@ public class OrderTimeoutService(IServiceProvider serviceProvider, ILogger<Order
                             var oldStatus = order.Status;
                             order.CancelDueToStockFailure();
                             var reason = "Order timeout while waiting for stock reservation.";
-
+                            order.AddTimelineEvent(
+                                order.Status,
+                                $"Order {order.Status}",
+                                reason,
+                                "OrderTimeoutService");
                             var saga = await dbContext.OrderSagaStates
                                 .FirstOrDefaultAsync(s => s.OrderId == order.Id, stoppingToken);
 

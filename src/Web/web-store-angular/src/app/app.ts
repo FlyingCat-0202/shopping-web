@@ -40,6 +40,33 @@ interface OrderSummary {
   canReturn: boolean;
 }
 
+interface OrderDetail extends OrderSummary {
+  receiverName: string;
+  phoneNumber: string;
+  shippingAddress: string;
+  paymentMethod: string;
+  items: OrderDetailItem[];
+  timeline: OrderTimelineItem[];
+}
+
+interface OrderDetailItem {
+  productId: string;
+  productName: string;
+  productImageUrl?: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+interface OrderTimelineItem {
+  id: string;
+  status: string;
+  title: string;
+  description: string;
+  source: string;
+  occurredAt?: string;
+}
+
+
 interface PaymentSummary {
   id: string;
   orderId: string;
@@ -96,7 +123,7 @@ export class App implements OnInit {
     currency: 'USD',
   });
 
-  private readonly fallbackImages = [
+  readonly fallbackImages = [
     'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=85',
     'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=85',
     'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=900&q=85',
@@ -111,6 +138,7 @@ export class App implements OnInit {
   readonly categories = signal<Category[]>([]);
   readonly cart = signal<CartItem[]>([]);
   readonly orders = signal<OrderSummary[]>([]);
+  readonly selectedOrder = signal<OrderDetail | null>(null);
   readonly payments = signal<Record<string, PaymentSummary>>({});
   readonly adminPayments = signal<PaymentSummary[]>([]);
   readonly paymentProviders = signal<PaymentProviderOption[]>(this.defaultPaymentProviders());
@@ -122,6 +150,7 @@ export class App implements OnInit {
   readonly checkoutBusy = signal(false);
   readonly confirmingPayments = signal<Record<string, boolean>>({});
   readonly orderActionBusy = signal<Record<string, boolean>>({});
+  readonly orderDetailBusy = signal<Record<string, boolean>>({});
   readonly paymentMockBusy = signal<Record<string, boolean>>({});
   readonly adminPaymentsLoading = signal(false);
   readonly searchKeyword = signal('');
@@ -817,6 +846,27 @@ export class App implements OnInit {
     }
   }
 
+  async openOrderDetail(order: OrderSummary): Promise<void> {
+    if (this.orderDetailBusy()[order.id]) return;
+
+    this.orderDetailBusy.update((current) => ({ ...current, [order.id]: true }));
+
+    try {
+      const detailPath = this.isAdmin()
+        ? `/api/order/admin/${order.id}`
+        : `/api/order/${order.id}`;
+      const response = await this.api.request<any>('order', detailPath, { auth: true });
+      this.selectedOrder.set(this.normalizeOrderDetail(response));
+    } catch (error) {
+      this.showToast(this.api.messageFromError(error));
+    } finally {
+      this.orderDetailBusy.update((current) => ({ ...current, [order.id]: false }));
+    }
+  }
+
+  closeOrderDetail(): void {
+    this.selectedOrder.set(null);
+  }
   async confirmPayment(order: OrderSummary): Promise<void> {
     if (this.confirmingPayments()[order.id]) return;
 
@@ -1020,6 +1070,10 @@ export class App implements OnInit {
     return Boolean(this.orderActionBusy()[this.orderActionKey(order, action)]);
   }
 
+  isOrderDetailBusy(order: OrderSummary): boolean {
+    return Boolean(this.orderDetailBusy()[order.id]);
+  }
+
   isMockingPayment(payment: PaymentSummary, success: boolean): boolean {
     return Boolean(this.paymentMockBusy()[`${payment.id}:${success ? 'success' : 'fail'}`]);
   }
@@ -1072,6 +1126,14 @@ export class App implements OnInit {
     return order.id;
   }
 
+  trackByOrderDetailItem(_: number, item: OrderDetailItem): string {
+    return item.productId;
+  }
+
+  trackByTimelineItem(_: number, item: OrderTimelineItem): string {
+    return item.id;
+  }
+
   trackByPayment(_: number, payment: PaymentSummary): string {
     return payment.id;
   }
@@ -1118,6 +1180,43 @@ export class App implements OnInit {
       paymentStatus: order.paymentStatus ?? order.PaymentStatus ?? 'Unknown',
       canCancel: Boolean(order.canCancel ?? order.CanCancel),
       canReturn: Boolean(order.canReturn ?? order.CanReturn),
+    };
+  }
+
+private normalizeOrderDetail(order: any): OrderDetail {
+    const base = this.normalizeOrder(order);
+    const items = order.items ?? order.Items ?? [];
+    const timeline = order.timeline ?? order.Timeline ?? [];
+
+    return {
+      ...base,
+      receiverName: order.receiverName ?? order.ReceiverName ?? '',
+      phoneNumber: order.phoneNumber ?? order.PhoneNumber ?? '',
+      shippingAddress: order.shippingAddress ?? order.ShippingAddress ?? '',
+      paymentMethod: order.paymentMethod ?? order.PaymentMethod ?? '',
+      items: items.map((item: any) => this.normalizeOrderDetailItem(item)),
+      timeline: timeline.map((item: any) => this.normalizeTimelineItem(item)),
+    };
+  }
+
+  private normalizeOrderDetailItem(item: any): OrderDetailItem {
+    return {
+      productId: String(item.productId ?? item.ProductId),
+      productName: item.productName ?? item.ProductName ?? `Product ${this.shortId(String(item.productId ?? item.ProductId))}`,
+      productImageUrl: item.productImageUrl ?? item.ProductImageUrl,
+      quantity: Number(item.quantity ?? item.Quantity ?? 0),
+      unitPrice: Number(item.unitPrice ?? item.UnitPrice ?? 0),
+    };
+  }
+
+  private normalizeTimelineItem(item: any): OrderTimelineItem {
+    return {
+      id: String(item.id ?? item.Id),
+      status: item.status ?? item.Status ?? 'Unknown',
+      title: item.title ?? item.Title ?? 'Order update',
+      description: item.description ?? item.Description ?? '',
+      source: item.source ?? item.Source ?? 'Order',
+      occurredAt: item.occurredAt ?? item.OccurredAt,
     };
   }
 

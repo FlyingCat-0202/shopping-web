@@ -71,6 +71,12 @@ public class ProductDbContext(DbContextOptions<ProductDbContext> options) : DbCo
                   .HasConversion<string>()
                   .HasMaxLength(30);
 
+            entity.Property(r => r.ProductName)
+                  .HasMaxLength(200);
+
+            entity.Property(r => r.ProductImageUrl)
+                  .HasMaxLength(1000);
+
             entity.Property(r => r.UnitPrice)
                   .HasColumnType("decimal(18,2)");
 

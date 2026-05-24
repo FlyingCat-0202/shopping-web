@@ -9,6 +9,7 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
 {
     public DbSet<OrderEntity> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
+    public DbSet<OrderTimelineEvent> OrderTimelineEvents { get; set; } = null!;
     public DbSet<OrderSagaState> OrderSagaStates { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -38,6 +39,8 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
         {
             entity.ToTable("OrderDetails", "order");
             entity.HasKey(od => new { od.OrderId, od.ProductId });
+            entity.Property(od => od.ProductName).HasMaxLength(200);
+            entity.Property(od => od.ProductImageUrl).HasMaxLength(1000);
             entity.Property(od => od.UnitPrice).HasColumnType("decimal(18,2)");
             entity.ToTable(t => t.HasCheckConstraint("CK_OrderDetails_UnitPrice", "\"UnitPrice\" >= 0"));
             entity.ToTable(t => t.HasCheckConstraint("CK_OrderDetails_Quantity", "\"Quantity\" > 0"));
@@ -47,7 +50,21 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
                   .HasForeignKey(od => od.OrderId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
-
+        modelBuilder.Entity<OrderTimelineEvent>(entity =>
+        {
+            entity.ToTable("OrderTimelineEvents", "order");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.Title).HasMaxLength(120);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Source).HasMaxLength(80);
+            entity.HasIndex(e => new { e.OrderId, e.OccurredAt })
+                  .HasDatabaseName("IX_OrderTimelineEvents_OrderId_OccurredAt");
+            entity.HasOne(e => e.Order)
+                  .WithMany(o => o.Timeline)
+                  .HasForeignKey(e => e.OrderId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<OrderSagaState>(entity =>
         {
             entity.ToTable("OrderSagaStates", "order");

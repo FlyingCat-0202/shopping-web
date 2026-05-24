@@ -58,6 +58,8 @@ public static class OrderEndpoints
         admin.MapPut("/{id:guid}/deliver", DeliverOrder)
             .AddEndpointFilter<IdempotencyFilter>()
             .WithName("DeliverOrder");
+        admin.MapGet("/admin/{id:guid}", GetAdminOrderById)
+            .WithName("GetAdminOrderById");
     }
 
     // ── User Handlers ─────────────────────────────────────────────────────────
@@ -165,13 +167,13 @@ public static class OrderEndpoints
                 o.DeliveryDetails.PhoneNumber,
                 o.DeliveryDetails.ShippingAddress,
                 o.PaymentMethod,
-                o.Status,
-                Items = o.Items
-                    .Select(od => new OrderItemResponse(od.ProductId, od.Quantity, od.UnitPrice))
-                    .ToList()
+                o.Status
             })
             .FirstOrDefaultAsync(cancellationToken);
         if (order == null) return Results.NotFound();
+
+        var items = await GetOrderItems(db, id, cancellationToken);
+        var timeline = await GetOrderTimeline(db, id, cancellationToken);
 
         return Results.Ok(new OrderDetailResponse(
             order.Id, order.OrderDate, order.TotalAmount,
@@ -183,7 +185,8 @@ public static class OrderEndpoints
             order.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
                 or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
             order.Status == OrderStatus.Delivered,
-            order.Items));
+            items,
+            timeline));
     }
 
     private static async Task<IResult> CancelOrder(
@@ -204,6 +207,7 @@ public static class OrderEndpoints
             return conflict!;
 
         var reason = "Customer cancelled order.";
+        AddStatusTimeline(order, oldStatus, reason, "Customer");
         await MarkSagaCancellingAsync(db, order, oldStatus, reason, cancellationToken);
 
         await PublishReleaseStock(
@@ -247,6 +251,7 @@ public static class OrderEndpoints
 
         if (!TryApplyStatusChange(order, order.RequestReturn, out var oldStatus, out var conflict))
             return conflict!;
+        AddStatusTimeline(order, oldStatus, "Customer requested return.", "Customer");
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -304,6 +309,50 @@ public static class OrderEndpoints
         return Results.Ok(new PagedResult<AdminOrderSummaryResponse>(orders, totalCount, pageIndex, pageSize));
     }
 
+    private static async Task<IResult> GetAdminOrderById(
+        Guid id,
+        OrderDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.AsNoTracking()
+            .Where(o => o.Id == id)
+            .Select(o => new
+            {
+                o.Id,
+                o.CustomerId,
+                o.OrderDate,
+                o.TotalAmount,
+                o.DeliveryDetails.ReceiverName,
+                o.DeliveryDetails.PhoneNumber,
+                o.DeliveryDetails.ShippingAddress,
+                o.PaymentMethod,
+                o.Status
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (order == null) return Results.NotFound();
+
+        var items = await GetOrderItems(db, id, cancellationToken);
+        var timeline = await GetOrderTimeline(db, id, cancellationToken);
+
+        return Results.Ok(new AdminOrderDetailResponse(
+            order.Id,
+            order.CustomerId,
+            order.OrderDate,
+            order.TotalAmount,
+            order.ReceiverName,
+            order.PhoneNumber,
+            order.ShippingAddress,
+            order.PaymentMethod.ToString(),
+            order.Status.ToString(),
+            OrderEntity.ComputePaymentState(order.Status, order.PaymentMethod).ToString(),
+            order.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            order.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
+                or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
+            order.Status == OrderStatus.Delivered,
+            items,
+            timeline));
+    }
     private static async Task<IResult> ApproveReturn(
         Guid id,
         OrderDbContext db,
@@ -315,6 +364,7 @@ public static class OrderEndpoints
 
         if (!TryApplyStatusChange(order, order.ApproveReturn, out var oldStatus, out var conflict))
             return conflict!;
+        AddStatusTimeline(order, oldStatus, "Admin approved return.", "Admin");
 
         await PublishReleaseStock(
             publishEndpoint,
@@ -342,6 +392,7 @@ public static class OrderEndpoints
         if (order == null) return Results.NotFound();
         if (!TryApplyStatusChange(order, order.RejectReturn, out var oldStatus, out var conflict))
             return conflict!;
+        AddStatusTimeline(order, oldStatus, "Admin rejected return.", "Admin");
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -362,6 +413,7 @@ public static class OrderEndpoints
         if (order == null) return Results.NotFound();
         if (!TryApplyStatusChange(order, order.Ship, out var oldStatus, out var conflict))
             return conflict!;
+        AddStatusTimeline(order, oldStatus, "Admin shipped order.", "Admin");
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -382,6 +434,7 @@ public static class OrderEndpoints
         if (order == null) return Results.NotFound();
         if (!TryApplyStatusChange(order, order.Deliver, out var oldStatus, out var conflict))
             return conflict!;
+        AddStatusTimeline(order, oldStatus, "Admin marked order as delivered.", "Admin");
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -466,7 +519,54 @@ public static class OrderEndpoints
         saga.FailureReason = reason;
         saga.MoveTo(OrderSagaSteps.StockReleasePending);
     }
+    private static void AddStatusTimeline(
+        OrderEntity order,
+        OrderStatus oldStatus,
+        string reason,
+        string source)
+    {
+        if (oldStatus == order.Status)
+            return;
 
+        order.AddTimelineEvent(
+            order.Status,
+            $"Order {order.Status}",
+            reason,
+            source);
+    }
+
+    private static Task<List<OrderItemResponse>> GetOrderItems(
+        OrderDbContext db,
+        Guid orderId,
+        CancellationToken cancellationToken)
+        => db.OrderDetails.AsNoTracking()
+            .Where(od => od.OrderId == orderId)
+            .OrderBy(od => od.ProductId)
+            .Select(od => new OrderItemResponse(
+                od.ProductId,
+                string.IsNullOrWhiteSpace(od.ProductName)
+                    ? $"Product {od.ProductId.ToString("N").Substring(0, 8)}"
+                    : od.ProductName,
+                od.ProductImageUrl,
+                od.Quantity,
+                od.UnitPrice))
+            .ToListAsync(cancellationToken);
+
+    private static Task<List<OrderTimelineItemResponse>> GetOrderTimeline(
+        OrderDbContext db,
+        Guid orderId,
+        CancellationToken cancellationToken)
+        => db.OrderTimelineEvents.AsNoTracking()
+            .Where(t => t.OrderId == orderId)
+            .OrderBy(t => t.OccurredAt)
+            .Select(t => new OrderTimelineItemResponse(
+                t.Id,
+                t.Status,
+                t.Title,
+                t.Description,
+                t.Source,
+                t.OccurredAt))
+            .ToListAsync(cancellationToken);
     private static bool TryApplyStatusChange(
         OrderEntity order,
         Action changeStatus,

@@ -19,10 +19,14 @@ public class Order
     // ── Collections (Aggregate Root) ──────────────────────────────────────────
     private readonly List<OrderDetail> _items = [];
     public IReadOnlyCollection<OrderDetail> Items => _items.AsReadOnly();
+    private readonly List<OrderTimelineEvent> _timeline = [];
+    public IReadOnlyCollection<OrderTimelineEvent> Timeline => _timeline.AsReadOnly();
 
     // ── Factory ───────────────────────────────────────────────────────────────
     public static Order Create(Guid customerId, PaymentMethodType paymentMethod,
-        string receiverName, string phoneNumber, string shippingAddress) => new()
+        string receiverName, string phoneNumber, string shippingAddress)
+    {
+        var order = new Order
         {
             Id = Guid.NewGuid(),
             CustomerId = customerId,
@@ -31,6 +35,15 @@ public class Order
             Status = OrderStatus.Pending,
             TotalAmount = 0
         };
+
+        order.AddTimelineEvent(
+            OrderStatus.Pending,
+            "Order submitted",
+            "Đơn hàng đã được tạo và đang chờ giữ kho.",
+            "Order");
+
+        return order;
+    }
 
     // ── Domain Behaviors ──────────────────────────────────────────────────────
     public void AddOrderItem(Guid productId, decimal unitPrice, int quantity)
@@ -43,17 +56,23 @@ public class Order
     }
 
     public void MarkStockReserved(Dictionary<Guid, decimal> prices)
+        => MarkStockReserved(prices.Select(x =>
+            new OrderItemSnapshot(x.Key, $"Product {x.Key}", null, x.Value)));
+
+    public void MarkStockReserved(IEnumerable<OrderItemSnapshot> productSnapshots)
     {
         if (Status != OrderStatus.Pending)
             throw new InvalidOperationException($"Không thể giữ kho cho đơn hàng ở trạng thái {Status}.");
 
+        var snapshots = productSnapshots.ToDictionary(x => x.ProductId);
         decimal total = 0;
         foreach (var item in _items)
         {
-            if (!prices.TryGetValue(item.ProductId, out var price))
+            if (!snapshots.TryGetValue(item.ProductId, out var snapshot))
                 throw new InvalidOperationException($"Thiếu giá đã xác thực cho sản phẩm {item.ProductId}.");
 
-            item.UpdateUnitPrice(price);
+            item.UpdateUnitPrice(snapshot.UnitPrice);
+            item.UpdateProductSnapshot(snapshot.ProductName, snapshot.ProductImageUrl);
             total += item.UnitPrice * item.Quantity;
         }
 
@@ -134,6 +153,17 @@ public class Order
         or OrderStatus.Returned or OrderStatus.ReturnRejected;
     public bool CanReturn() => Status == OrderStatus.Delivered;
     public bool IsOnlinePayment() => PaymentMethod != PaymentMethodType.COD;
+        public void AddTimelineEvent(
+        OrderStatus status,
+        string title,
+        string description,
+        string source)
+        => _timeline.Add(new OrderTimelineEvent(
+            Id,
+            status.ToString(),
+            title,
+            description,
+            source));
 
     // ── Computed Properties ───────────────────────────────────────────────────
     [NotMapped]
@@ -154,3 +184,9 @@ public class Order
                 _ => PaymentStatus.Paid
             };
 }
+
+public sealed record OrderItemSnapshot(
+    Guid ProductId,
+    string ProductName,
+    string? ProductImageUrl,
+    decimal UnitPrice);

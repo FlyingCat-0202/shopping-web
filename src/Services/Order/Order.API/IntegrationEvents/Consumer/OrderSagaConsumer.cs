@@ -359,6 +359,22 @@ public class OrderSagaConsumer(OrderDbContext dbContext, ILogger<OrderSagaConsum
             Reason = reason
         }, ctx => ctx.SetRoutingKey(OrderStatusChangedRoutingKey), context.CancellationToken);
 
+    private static void AddStatusTimeline(
+        Domain.Entities.Order order,
+        OrderStatus oldStatus,
+        string reason,
+        string source)
+    {
+        if (oldStatus == order.Status)
+            return;
+
+        order.AddTimelineEvent(
+            order.Status,
+            $"Order {order.Status}",
+            reason,
+            source);
+    }
+
     private static Guid GetCorrelationId(Guid correlationId, Guid orderId)
         => correlationId == Guid.Empty ? orderId : correlationId;
 }

@@ -10,8 +10,7 @@ public class ProductDbContextFactory : IDesignTimeDbContextFactory<ProductDbCont
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__product-db")
             ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Missing connection string. Set ConnectionStrings__product-db before running EF tools, or run the service through Aspire AppHost.");
+            ?? "Host=localhost;Port=5432;Database=order-db;Username=postgres;Password=0211";
 
         var options = new DbContextOptionsBuilder<ProductDbContext>()
             .UseNpgsql(connectionString, npgsql =>

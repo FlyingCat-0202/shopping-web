@@ -17,9 +17,8 @@ var rabbitmq = builder.AddRabbitMQ("rabbitmq", rabbitMqUserName, rabbitMqPasswor
 
 var redis = builder.AddRedis("redis");
 
-// >>> THÊM CONTAINER ELASTICSEARCH TẠI ĐÂY <<<
 var elasticsearch = builder.AddElasticsearch("elasticsearch")
-    .WithDataVolume(); // Đảm bảo dữ liệu search không bị mất khi tắt Docker
+    .WithDataVolume();
 
 // ── Databases (mỗi service dùng DB riêng) ────────────────────────────────────
 var orderDb = postgres.AddDatabase("order-db");
@@ -47,11 +46,11 @@ var productApi = builder.AddProject<Product_API>("product-api")
     .WithReference(productDb)
     .WithReference(rabbitmq)
     .WithReference(redis)
-    .WithReference(elasticsearch) // <--- Nối Elasticsearch vào Product API
+    .WithReference(elasticsearch)
     .WaitFor(productDb)
     .WaitFor(rabbitmq)
     .WaitFor(redis)
-    .WaitFor(elasticsearch);      // <--- Đợi Elastic chạy xong mới start Product API
+    .WaitFor(elasticsearch);    
 
 var identityApi = builder.AddProject<Identity_API>("identity-api")
     .WithReference(identityDb)
@@ -77,19 +76,7 @@ var notificationApi = builder.AddProject<Notification_API>("notification-api")
     .WaitFor(rabbitmq)
     .WaitFor(redis);
 
-builder.AddExecutable(
-        "web-store-angular",
-        "powershell",
-        "../src/Web/web-store-angular",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "start-aspire.ps1",
-        "-HostAddress",
-        "0.0.0.0",
-        "-Port",
-        "4200")
+builder.AddNpmApp("web-store-angular", "../src/Web/web-store-angular", scriptName: "start:aspire")
     .WithHttpEndpoint(port: 4200, targetPort: 4200, name: "http", isProxied: false)
     .WaitFor(identityApi)
     .WaitFor(productApi)
