@@ -92,4 +92,17 @@ public class PaymentTransaction
         FailureReason = string.IsNullOrWhiteSpace(reason) ? "Thanh toán quá thời gian xử lý." : reason;
         CompletedAt = DateTime.UtcNow;
     }
+
+    public void MarkRefunded(string reason)
+    {
+        if (Status == PaymentStatus.Refunded)
+            return;
+
+        if (Status != PaymentStatus.Succeeded)
+            throw new InvalidOperationException($"Không thể hoàn tiền ở trạng thái {Status}.");
+
+        Status = PaymentStatus.Refunded;
+        FailureReason = string.IsNullOrWhiteSpace(reason) ? "Payment was refunded." : reason;
+        CompletedAt = DateTime.UtcNow;
+    }
 }

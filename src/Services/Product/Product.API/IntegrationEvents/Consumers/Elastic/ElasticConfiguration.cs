@@ -7,19 +7,11 @@ public static class ElasticConfigurator
 {
     public static async Task SetupIndexAsync(ElasticsearchClient elasticClient, ILogger<Program> logger)
     {
-        const string indexName = "products";
+        const string indexName = ElasticProductIndex.Name;
 
         try
         {
             var existsResponse = await elasticClient.Indices.ExistsAsync(indexName);
-
-            // Mở comment để đập đi xây lại (Chạy 1 lần rồi comment lại)
-            if (existsResponse.Exists)
-            {
-                await elasticClient.Indices.DeleteAsync(indexName);
-                logger.LogWarning($"Đã xóa index cũ: {indexName}");
-                existsResponse = await elasticClient.Indices.ExistsAsync(indexName);
-            }
 
             if (!existsResponse.Exists)
             {
@@ -33,7 +25,7 @@ public static class ElasticConfigurator
                             .Text(t => t.Description)
                             .Keyword(k => k.ImageUrl)
                             .DenseVector(v => v.NameEmbeddingVector, d => d
-                                .Dims(368)
+                                .Dims(ElasticProductIndex.EmbeddingDimensions)
                                 .Index(true)
                                 .Similarity(DenseVectorSimilarity.Cosine)
                             )
@@ -47,7 +39,10 @@ public static class ElasticConfigurator
                     return;
                 }
 
-                logger.LogInformation("Tạo thành công Mapping Index: {Index} với Vector 3072 chiều.", indexName);
+                logger.LogInformation(
+                    "Tạo thành công mapping index {Index} với vector {Dimensions} chiều.",
+                    indexName,
+                    ElasticProductIndex.EmbeddingDimensions);
             }
         }
         catch (Exception ex)

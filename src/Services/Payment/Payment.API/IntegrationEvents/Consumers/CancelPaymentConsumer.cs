@@ -48,6 +48,14 @@ public class CancelPaymentConsumer(PaymentDbContext dbContext, ILogger<CancelPay
                 return;
             }
 
+            if (payment.Status == PaymentStatus.Succeeded)
+            {
+                payment.MarkRefunded(message.Reason);
+                await PublishPaymentRefunded(context, payment, payment.FailureReason);
+                await dbContext.SaveChangesAsync(context.CancellationToken);
+                return;
+            }
+
             await PublishCurrentPaymentState(context, payment);
             await dbContext.SaveChangesAsync(context.CancellationToken);
         }
@@ -69,8 +77,9 @@ public class CancelPaymentConsumer(PaymentDbContext dbContext, ILogger<CancelPay
     private static Task PublishCurrentPaymentState(
         ConsumeContext<CancelPaymentCommand> context,
         PaymentTransaction payment)
-        => payment.Status == PaymentStatus.Succeeded
-            ? context.Publish(new PaymentSucceededEvent
+        => payment.Status switch
+        {
+            PaymentStatus.Succeeded => context.Publish(new PaymentSucceededEvent
             {
                 CorrelationId = context.Message.CorrelationId,
                 PaymentId = payment.Id,
@@ -79,8 +88,26 @@ public class CancelPaymentConsumer(PaymentDbContext dbContext, ILogger<CancelPay
                 Amount = payment.Amount,
                 PaymentMethod = payment.PaymentMethod,
                 ProviderTransactionId = payment.ProviderTransactionId ?? string.Empty
-            }, context.CancellationToken)
-            : PublishPaymentFailed(context, payment, payment.FailureReason);
+            }, context.CancellationToken),
+            PaymentStatus.Refunded => PublishPaymentRefunded(context, payment, payment.FailureReason),
+            _ => PublishPaymentFailed(context, payment, payment.FailureReason)
+        };
+
+    private static Task PublishPaymentRefunded(
+        ConsumeContext<CancelPaymentCommand> context,
+        PaymentTransaction payment,
+        string? reason)
+        => context.Publish(new PaymentRefundedEvent
+        {
+            CorrelationId = context.Message.CorrelationId,
+            PaymentId = payment.Id,
+            OrderId = payment.OrderId,
+            CustomerId = payment.CustomerId,
+            Amount = payment.Amount,
+            PaymentMethod = payment.PaymentMethod,
+            ProviderTransactionId = payment.ProviderTransactionId ?? string.Empty,
+            Reason = string.IsNullOrWhiteSpace(reason) ? "Payment was refunded." : reason
+        }, context.CancellationToken);
 
     private static Task PublishPaymentFailed(
         ConsumeContext<CancelPaymentCommand> context,

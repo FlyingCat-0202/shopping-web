@@ -2,15 +2,20 @@ using EventBus.Contracts;
 using MassTransit;
 using Order.API.Saga;
 using Order.Domain.Enums;
+using Order.Infrastructure.Saga;
+using Payment.Domain.Entities;
+using PaymentStatus = Payment.Domain.Enums.PaymentStatus;
 
 var tests = new (string Name, Action Run)[]
 {
     ("State machine exposes real flow events", StateMachineExposesRealFlowEvents),
+    ("Saga timeout state names match state machine properties", SagaTimeoutStateNamesMatchStateMachineProperties),
     ("COD processing order can be cancelled before shipping", CodProcessingOrderCanBeCancelled),
     ("Online paid processing order cannot be cancelled without refund flow", OnlinePaidProcessingOrderCannotBeCancelled),
     ("Online payment pending order can be cancelled", OnlinePaymentPendingOrderCanBeCancelled),
     ("Stock timeout cancels pending order", StockTimeoutCancelsPendingOrder),
-    ("Payment success can process before payment-created event", PaymentSuccessCanProcessBeforePaymentCreatedEvent)
+    ("Payment success can process before payment-created event", PaymentSuccessCanProcessBeforePaymentCreatedEvent),
+    ("Succeeded payment can be refunded during cancellation", SucceededPaymentCanBeRefundedDuringCancellation)
 };
 
 foreach (var test in tests)
@@ -34,6 +39,7 @@ static void StateMachineExposesRealFlowEvents()
         typeof(OrderSubmittedEvent),
         typeof(PaymentCreatedEvent),
         typeof(PaymentFailedEvent),
+        typeof(PaymentRefundedEvent),
         typeof(PaymentSucceededEvent),
         typeof(PaymentTimeoutExpired),
         typeof(StockReleasedEvent),
@@ -44,6 +50,29 @@ static void StateMachineExposesRealFlowEvents()
 
     AssertSequenceEqual(expectedEvents, eventTypes, "OrderStateMachine event subscriptions");
     AssertFalse(eventTypes.Contains(typeof(OrderStatusChangedEvent)), "Saga must not consume OrderStatusChangedEvent");
+}
+
+static void SagaTimeoutStateNamesMatchStateMachineProperties()
+{
+    var statePropertyNames = typeof(OrderStateMachine)
+        .GetProperties()
+        .Where(p => p.PropertyType == typeof(State))
+        .Select(p => p.Name)
+        .ToHashSet(StringComparer.Ordinal);
+
+    var expectedStateNames = new[]
+    {
+        OrderSagaStateNames.Submitted,
+        OrderSagaStateNames.StockReserving,
+        OrderSagaStateNames.PaymentCreating,
+        OrderSagaStateNames.PaymentPending,
+        OrderSagaStateNames.Cancelling
+    };
+
+    foreach (var stateName in expectedStateNames)
+    {
+        AssertTrue(statePropertyNames.Contains(stateName), $"State machine contains {stateName}");
+    }
 }
 
 static void CodProcessingOrderCanBeCancelled()
@@ -99,6 +128,20 @@ static void PaymentSuccessCanProcessBeforePaymentCreatedEvent()
 
     AssertEqual(OrderStatus.Processing, order.Status, "Order status");
     AssertEqual(200_000m, order.TotalAmount, "Order total");
+}
+
+static void SucceededPaymentCanBeRefundedDuringCancellation()
+{
+    var payment = PaymentTransaction.Create(
+        Guid.NewGuid(),
+        Guid.NewGuid(),
+        100_000m,
+        PaymentMethodType.MeiMei.ToString());
+
+    payment.MarkSucceeded("provider-transaction");
+    payment.MarkRefunded("Order was cancelled after payment succeeded.");
+
+    AssertEqual(PaymentStatus.Refunded, payment.Status, "Payment status after refund");
 }
 
 static Order.Domain.Entities.Order CreateOrder(PaymentMethodType paymentMethod)

@@ -376,7 +376,7 @@ public static class PaymentEndpoints
             payment.CompletedAt);
 
     private static bool IsTerminal(PaymentTransaction payment)
-        => payment.Status is PaymentStatus.Succeeded or PaymentStatus.Failed or PaymentStatus.Expired;
+        => payment.Status is PaymentStatus.Succeeded or PaymentStatus.Failed or PaymentStatus.Expired or PaymentStatus.Refunded;
 
     private static async Task<IResult> RepublishTerminalPayment(
         PaymentTransaction payment,
@@ -416,9 +416,12 @@ public static class PaymentEndpoints
         IPublishEndpoint publishEndpoint,
         PaymentTransaction payment,
         CancellationToken cancellationToken)
-        => payment.Status == PaymentStatus.Succeeded
-            ? PublishSucceeded(publishEndpoint, payment, cancellationToken)
-            : PublishFailed(publishEndpoint, payment, cancellationToken);
+        => payment.Status switch
+        {
+            PaymentStatus.Succeeded => PublishSucceeded(publishEndpoint, payment, cancellationToken),
+            PaymentStatus.Refunded => PublishRefunded(publishEndpoint, payment, cancellationToken),
+            _ => PublishFailed(publishEndpoint, payment, cancellationToken)
+        };
 
     private static Task PublishSucceeded(
         IPublishEndpoint publishEndpoint,
@@ -447,6 +450,22 @@ public static class PaymentEndpoints
             CustomerId = payment.CustomerId,
             Reason = payment.FailureReason ?? "Thanh toán thất bại."
         }, ctx => ctx.SetRoutingKey(PaymentFailedRoutingKey), cancellationToken);
+
+    private static Task PublishRefunded(
+        IPublishEndpoint publishEndpoint,
+        PaymentTransaction payment,
+        CancellationToken cancellationToken)
+        => publishEndpoint.Publish(new PaymentRefundedEvent
+        {
+            CorrelationId = payment.OrderId,
+            PaymentId = payment.Id,
+            OrderId = payment.OrderId,
+            CustomerId = payment.CustomerId,
+            Amount = payment.Amount,
+            PaymentMethod = payment.PaymentMethod,
+            ProviderTransactionId = payment.ProviderTransactionId ?? string.Empty,
+            Reason = payment.FailureReason ?? "Payment was refunded."
+        }, cancellationToken);
 
     private static bool IsValidWebhookSignature(HttpRequest request, string payload, string secret)
     {

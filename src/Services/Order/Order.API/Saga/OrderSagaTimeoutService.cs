@@ -2,6 +2,7 @@ using EventBus.Contracts;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Order.Infrastructure.Data;
+using Order.Infrastructure.Saga;
 
 namespace Order.API.Saga;
 
@@ -46,7 +47,7 @@ public sealed class OrderSagaTimeoutService(
 
             var stockTimeouts = await db.OrderSagaInstances
                 .AsNoTracking()
-                .Where(s => s.CurrentState == nameof(OrderStateMachine.StockReserving)
+                .Where(s => s.CurrentState == OrderSagaStateNames.StockReserving
                     && s.UpdatedAt < stockThreshold)
                 .OrderBy(s => s.UpdatedAt)
                 .Take(100)
@@ -64,7 +65,7 @@ public sealed class OrderSagaTimeoutService(
 
             var paymentCreationTimeouts = await db.OrderSagaInstances
                 .AsNoTracking()
-                .Where(s => s.CurrentState == nameof(OrderStateMachine.PaymentCreating)
+                .Where(s => s.CurrentState == OrderSagaStateNames.PaymentCreating
                     && s.UpdatedAt < paymentCreationThreshold)
                 .OrderBy(s => s.UpdatedAt)
                 .Take(100)

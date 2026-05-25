@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Order.Domain.Entities;
 using Order.Domain.Enums;
 using Order.Infrastructure.Data;
+using Order.Infrastructure.Saga;
 
 namespace Order.API.Saga;
 
@@ -32,6 +33,7 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
     public Event<StockReservationFailedEvent> StockReservationFailed { get; private set; } = null!;
     public Event<PaymentCreatedEvent> PaymentCreated { get; private set; } = null!;
     public Event<PaymentSucceededEvent> PaymentSucceeded { get; private set; } = null!;
+    public Event<PaymentRefundedEvent> PaymentRefunded { get; private set; } = null!;
     public Event<PaymentFailedEvent> PaymentFailed { get; private set; } = null!;
     public Event<StockReleasedEvent> StockReleased { get; private set; } = null!;
     public Event<CancelOrderCommand> CancelRequested { get; private set; } = null!;
@@ -50,6 +52,7 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
         Event(() => StockReservationFailed, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => PaymentCreated, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => PaymentSucceeded, x => x.CorrelateById(ctx => ctx.Message.OrderId));
+        Event(() => PaymentRefunded, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => PaymentFailed, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => StockReleased, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => CancelRequested, x => x.CorrelateById(ctx => ctx.Message.OrderId));
@@ -269,8 +272,12 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
             When(CancelRequested).Then(_ => { }),
             When(StockTimedOut).Then(_ => { }),
             When(PaymentTimedOut).Then(_ => { }),
-            When(PaymentSucceeded).Then(_ => { }),
-            When(PaymentFailed).Then(_ => { }),
+            When(PaymentSucceeded)
+                .Activity(x => x.OfType<LatePaymentSucceededActivity>()),
+            When(PaymentFailed)
+                .Activity(x => x.OfType<ReleaseStockAfterPaymentCancelledActivity>()),
+            When(PaymentRefunded)
+                .Activity(x => x.OfType<ReleaseStockAfterPaymentRefundedActivity>()),
             When(StockReservationFailed)
                 .Then(ctx =>
                 {
@@ -525,7 +532,7 @@ public class LateStockReservedActivity :
 }
 
 /// <summary>
-/// Payment timeout → cancel Order + release stock + cancel payment
+/// Payment timeout → cancel Order + cancel/refund payment, then release stock after payment answers.
 /// </summary>
 public class PaymentTimeoutCancelActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, PaymentTimeoutExpired>
@@ -543,20 +550,6 @@ public class PaymentTimeoutCancelActivity(OrderDbContext db) :
             var reason = context.Saga.FailureReason ?? "Payment timeout";
             order.AddTimelineEvent(order.Status, $"Order {order.Status}", reason, "Saga:Timeout");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, reason);
-
-            // Compensation: release stock + cancel payment
-            await context.Publish(new ReleaseStockCommand
-            {
-                CorrelationId = order.Id,
-                OrderId = order.Id,
-                CustomerId = order.CustomerId,
-                Reason = reason,
-                Items = [.. order.Items.Select(i => new OrderItemInfo
-                {
-                    ProductId = i.ProductId,
-                    Quantity = i.Quantity
-                })]
-            });
 
             await context.Publish(new CancelPaymentCommand
             {
@@ -615,7 +608,8 @@ public class CancelOrderActivity(OrderDbContext db) :
 }
 
 /// <summary>
-/// Customer cancel khi đã có stock (PaymentCreating/PaymentPending) → cancel + release stock + cancel payment
+/// Customer cancel khi đã có stock (PaymentCreating/PaymentPending) → cancel + cancel/refund payment.
+/// Stock chỉ được release khi payment service xác nhận failed/refunded.
 /// </summary>
 public class CancelWithCompensationActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, CancelOrderCommand>
@@ -634,21 +628,6 @@ public class CancelWithCompensationActivity(OrderDbContext db) :
                 context.Message.Reason, "Customer");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, context.Message.Reason);
 
-            // Compensation: release stock
-            await context.Publish(new ReleaseStockCommand
-            {
-                CorrelationId = order.Id,
-                OrderId = order.Id,
-                CustomerId = order.CustomerId,
-                Reason = context.Message.Reason,
-                Items = [.. order.Items.Select(i => new OrderItemInfo
-                {
-                    ProductId = i.ProductId,
-                    Quantity = i.Quantity
-                })]
-            });
-
-            // If online payment was pending, cancel it
             if (oldStatus == OrderStatus.PaymentPending && order.IsOnlinePayment())
             {
                 await context.Publish(new CancelPaymentCommand
@@ -673,6 +652,105 @@ public class CancelWithCompensationActivity(OrderDbContext db) :
         where TException : Exception => next.Faulted(context);
 
     public void Probe(ProbeContext context) => context.CreateScope("cancel-with-compensation-activity");
+    public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
+}
+
+/// <summary>
+/// PaymentSucceededEvent có thể về trễ sau khi order đã vào Cancelling.
+/// Khi chưa có refund flow provider thật, CancelPaymentCommand đóng vai trò cancel-or-refund idempotent.
+/// </summary>
+public class LatePaymentSucceededActivity :
+    IStateMachineActivity<OrderSagaInstance, PaymentSucceededEvent>
+{
+    public async Task Execute(BehaviorContext<OrderSagaInstance, PaymentSucceededEvent> context,
+        IBehavior<OrderSagaInstance, PaymentSucceededEvent> next)
+    {
+        var reason = context.Saga.FailureReason ?? "Payment succeeded after order cancellation started.";
+
+        await context.Publish(new CancelPaymentCommand
+        {
+            CorrelationId = context.Saga.CorrelationId,
+            OrderId = context.Saga.CorrelationId,
+            CustomerId = context.Saga.CustomerId,
+            Amount = context.Message.Amount,
+            PaymentMethod = context.Message.PaymentMethod,
+            Reason = reason
+        });
+
+        await next.Execute(context);
+    }
+
+    public Task Faulted<TException>(BehaviorExceptionContext<OrderSagaInstance, PaymentSucceededEvent, TException> context,
+        IBehavior<OrderSagaInstance, PaymentSucceededEvent> next)
+        where TException : Exception => next.Faulted(context);
+
+    public void Probe(ProbeContext context) => context.CreateScope("late-payment-succeeded-activity");
+    public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
+}
+
+public class ReleaseStockAfterPaymentCancelledActivity(OrderDbContext db) :
+    IStateMachineActivity<OrderSagaInstance, PaymentFailedEvent>
+{
+    public async Task Execute(BehaviorContext<OrderSagaInstance, PaymentFailedEvent> context,
+        IBehavior<OrderSagaInstance, PaymentFailedEvent> next)
+    {
+        await ReleaseStockAfterPaymentTerminalState(context, db, context.Message.Reason);
+        await next.Execute(context);
+    }
+
+    public Task Faulted<TException>(BehaviorExceptionContext<OrderSagaInstance, PaymentFailedEvent, TException> context,
+        IBehavior<OrderSagaInstance, PaymentFailedEvent> next)
+        where TException : Exception => next.Faulted(context);
+
+    public void Probe(ProbeContext context) => context.CreateScope("release-stock-after-payment-cancelled-activity");
+    public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
+
+    internal static async Task ReleaseStockAfterPaymentTerminalState<TMessage>(
+        BehaviorContext<OrderSagaInstance, TMessage> context,
+        OrderDbContext db,
+        string? reason)
+        where TMessage : class
+    {
+        var order = await db.Orders.Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == context.Saga.CorrelationId);
+
+        if (order is null || order.Status != OrderStatus.Cancelled)
+            return;
+
+        await context.Publish(new ReleaseStockCommand
+        {
+            CorrelationId = order.Id,
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            Reason = string.IsNullOrWhiteSpace(reason) ? context.Saga.FailureReason ?? "Payment was cancelled." : reason,
+            Items = [.. order.Items.Select(i => new OrderItemInfo
+            {
+                ProductId = i.ProductId,
+                Quantity = i.Quantity
+            })]
+        });
+    }
+}
+
+public class ReleaseStockAfterPaymentRefundedActivity(OrderDbContext db) :
+    IStateMachineActivity<OrderSagaInstance, PaymentRefundedEvent>
+{
+    public async Task Execute(BehaviorContext<OrderSagaInstance, PaymentRefundedEvent> context,
+        IBehavior<OrderSagaInstance, PaymentRefundedEvent> next)
+    {
+        await ReleaseStockAfterPaymentCancelledActivity.ReleaseStockAfterPaymentTerminalState(
+            context,
+            db,
+            context.Message.Reason);
+
+        await next.Execute(context);
+    }
+
+    public Task Faulted<TException>(BehaviorExceptionContext<OrderSagaInstance, PaymentRefundedEvent, TException> context,
+        IBehavior<OrderSagaInstance, PaymentRefundedEvent> next)
+        where TException : Exception => next.Faulted(context);
+
+    public void Probe(ProbeContext context) => context.CreateScope("release-stock-after-payment-refunded-activity");
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 

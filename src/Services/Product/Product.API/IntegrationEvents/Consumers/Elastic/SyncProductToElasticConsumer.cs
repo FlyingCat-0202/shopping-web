@@ -17,6 +17,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
         {
             //await Task.Delay(4200);
             float[] queryVector = await aiEmbeddingService.GetVectorAsync(message.Name);
+            var embeddingVector = ElasticProductIndex.NormalizeVector(queryVector, logger, $"product {message.Id}");
             var doc = new ProductEsDocument(
                 Id: message.Id,
                 Name: message.Name,
@@ -25,11 +26,11 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
                 IsActive: message.IsActive,
                 Description: "",
                 ImageUrl: "",
-                NameEmbeddingVector: (queryVector != null && queryVector.Length > 0) ? queryVector : null
+                NameEmbeddingVector: embeddingVector
             );
 
             var response = await e.IndexAsync(doc, idx => idx
-                .Index("products")
+                .Index(ElasticProductIndex.Name)
                 .Id(doc.Id));
 
             logger.LogInformation("Đã đẩy sản phẩm {Name} vào ES thành công!", doc.Name); // THÊM DÒNG NÀY
@@ -51,7 +52,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
         var message = context.Message;
         try
         {
-            var response = await e.DeleteAsync("products", message.Id);
+            var response = await e.DeleteAsync(ElasticProductIndex.Name, message.Id);
 
             if (!response.IsValidResponse)
             {
@@ -79,17 +80,18 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
         try
         {
             float[] newVector = await aiEmbeddingService.GetVectorAsync(message.Name);
+            var embeddingVector = ElasticProductIndex.NormalizeVector(newVector, logger, $"product {message.Id}");
             var partialDoc = new
             {
                 Name = message.Name,
                 Price = message.Price,
                 CategoryName = message.CategoryName,
                 IsActive = message.IsActive,
-                NameEmbeddingVector = newVector
+                NameEmbeddingVector = embeddingVector
             };
 
             var response = await e.UpdateAsync<ProductEsDocument, object>(
-                "products",
+                ElasticProductIndex.Name,
                 message.Id,
                 u => u.Doc(partialDoc));
 

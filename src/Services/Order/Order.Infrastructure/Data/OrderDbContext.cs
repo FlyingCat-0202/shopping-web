@@ -1,6 +1,7 @@
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Order.Domain.Entities;
+using Order.Infrastructure.Saga;
 using OrderEntity = Order.Domain.Entities.Order;
 
 namespace Order.Infrastructure.Data;

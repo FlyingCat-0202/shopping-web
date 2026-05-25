@@ -332,35 +332,48 @@ public static class ProductEndpoints
 
                 // 1. Lấy vector của từ khóa từ AI Model 
                 float[] queryVector = await _aiEmbeddingService.GetVectorAsync(request.Keyword);
+                var normalizedQueryVector = ElasticProductIndex.NormalizeVector(queryVector, logger, $"search keyword '{keyword}'");
+                var useVectorSearch = normalizedQueryVector is not null;
 
                 // 2. Thực hiện Hybrid Search
                 var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s => s
-                    .Indices("products")
+                    .Indices(ElasticProductIndex.Name)
                     .From(from)
                     .Size(request.PageSize)
                     .Query(q => q
                         .Bool(b =>
                         {
                             // CẤU HÌNH SHOULD: Vector search & BM25
-                            b.Should(
-                                sh1 => sh1.ScriptScore(ss => ss
-                                    .Query(q2 => q2.MatchAll())
-                                    .Script(new Script
-                                    {
-                                        Source = "doc['nameEmbeddingVector'].isEmpty() ? 0.0 : cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0",
-                                        Params = new Dictionary<string, object>
+                            if (useVectorSearch)
+                            {
+                                b.Should(
+                                    sh1 => sh1.ScriptScore(ss => ss
+                                        .Query(q2 => q2.MatchAll())
+                                        .Script(new Script
                                         {
-                                            { "queryVector", queryVector! }
-                                        }
-                                    })
-                                ),
+                                            Source = "doc['nameEmbeddingVector'].isEmpty() ? 0.0 : cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0",
+                                            Params = new Dictionary<string, object>
+                                            {
+                                                { "queryVector", normalizedQueryVector! }
+                                            }
+                                        })
+                                    ),
 
-                                sh2 => sh2.MultiMatch(mm => mm
+                                    sh2 => sh2.MultiMatch(mm => mm
+                                        .Query(request.Keyword)
+                                        .Fields(new[] { "name^5", "categoryName" })
+                                        .Fuzziness(new Fuzziness("AUTO"))
+                                    )
+                                );
+                            }
+                            else
+                            {
+                                b.Should(sh => sh.MultiMatch(mm => mm
                                     .Query(request.Keyword)
                                     .Fields(new[] { "name^5", "categoryName" })
                                     .Fuzziness(new Fuzziness("AUTO"))
-                                )
-                            );
+                                ));
+                            }
 
                             // CẤU HÌNH FILTER ĐỘNG
                             if (!string.IsNullOrEmpty(targetCategory))

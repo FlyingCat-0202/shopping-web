@@ -3,6 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Order\Order.API\Order.API.csproj" />
     <ProjectReference Include="..\..\src\Services\Order\Order.Domain\Order.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Order\Order.Infrastructure\Order.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Payment\Payment.Domain\Payment.Domain.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\EventBus\EventBus.csproj" />
   </ItemGroup>
 

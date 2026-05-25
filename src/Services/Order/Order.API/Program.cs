@@ -7,8 +7,8 @@ using Microsoft.OpenApi;
 using Order.API.Endpoints;
 using Order.API.Saga;
 using Order.API.Validators;
-using Order.Domain.Entities;
 using Order.Infrastructure.Data;
+using Order.Infrastructure.Saga;
 using ServiceDefault;
 
 
