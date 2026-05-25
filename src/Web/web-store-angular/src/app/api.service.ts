@@ -30,12 +30,12 @@ interface RequestOptions {
 }
 
 const defaultApi: ApiConfig = {
-  identity: 'http://localhost:5049',
-  product: 'http://localhost:5001',
-  cart: 'http://localhost:5286',
-  order: 'http://localhost:5276',
-  payment: 'http://localhost:5296',
-  notification: 'http://localhost:5306',
+  identity: 'http://localhost:5000',
+  product: 'http://localhost:5000',
+  cart: 'http://localhost:5000',
+  order: 'http://localhost:5000',
+  payment: 'http://localhost:5000',
+  notification: 'http://localhost:5000',
 };
 
 const storageKeys = {
@@ -58,19 +58,8 @@ export class ApiService {
     return this.authState ? { ...this.authState } : null;
   }
 
-  saveApiConfig(config: ApiConfig): ApiConfig {
-    this.apiConfig = {
-      identity: this.trimUrl(config.identity || defaultApi.identity),
-      product: this.trimUrl(config.product || defaultApi.product),
-      cart: this.trimUrl(config.cart || defaultApi.cart),
-      order: this.trimUrl(config.order || defaultApi.order),
-      payment: this.trimUrl(config.payment || defaultApi.payment),
-      notification: this.trimUrl(config.notification || defaultApi.notification),
-    };
 
-    localStorage.setItem(storageKeys.api, JSON.stringify(this.apiConfig));
-    return this.config;
-  }
+
 
   saveAuth(auth: AuthState | null): AuthState | null {
     this.authState = auth;
@@ -186,11 +175,7 @@ export class ApiService {
   }
 
   private readApiConfig(): ApiConfig {
-    try {
-      return { ...defaultApi, ...JSON.parse(localStorage.getItem(storageKeys.api) || '{}') };
-    } catch {
-      return { ...defaultApi };
-    }
+    return { ...defaultApi };
   }
 
   private readAuth(): AuthState | null {

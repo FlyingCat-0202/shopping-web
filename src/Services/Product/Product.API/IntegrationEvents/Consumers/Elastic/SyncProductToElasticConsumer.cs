@@ -24,8 +24,8 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
                 Price: message.Price,
                 CategoryName: message.CategoryName,
                 IsActive: message.IsActive,
-                Description: "",
-                ImageUrl: "",
+                Description: message.Description,
+                ImageUrl: message.ImageUrl,
                 NameEmbeddingVector: embeddingVector
             );
 
@@ -87,6 +87,8 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
                 Price = message.Price,
                 CategoryName = message.CategoryName,
                 IsActive = message.IsActive,
+                Description = message.Description,
+                ImageUrl = message.ImageUrl,
                 NameEmbeddingVector = embeddingVector
             };
 

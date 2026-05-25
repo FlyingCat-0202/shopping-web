@@ -32,8 +32,10 @@ public abstract class FakeWalletPaymentProvider(
         CancellationToken cancellationToken)
     {
         var token = ComputeToken(payment.Id);
+        var publicScheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? request.Scheme;
+        var publicHost = request.Headers["X-Forwarded-Host"].FirstOrDefault() ?? request.Host.Value;
         var checkoutUrl =
-            $"{request.Scheme}://{request.Host}/api/payment/providers/{RouteName}/checkout/{payment.Id}?token={Uri.EscapeDataString(token)}";
+            $"{publicScheme}://{publicHost}/api/payment/providers/{RouteName}/checkout/{payment.Id}?token={Uri.EscapeDataString(token)}";
 
         return Task.FromResult(new PaymentCheckoutResult(
             Name,

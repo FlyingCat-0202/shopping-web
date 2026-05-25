@@ -38,6 +38,12 @@
     <Project Path="src\Services\Product\Product.Domain\Product.Domain.csproj" />
     <Project Path="src\Services\Product\Product.Infrastructure\Product.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Tools/">
+    <Project Path="src\Tools\DbSeeder\DbSeeder.csproj" />
+  </Folder>
+  <Folder Name="/src/Gateways/">
+    <Project Path="src\Gateways\ApiGateway\ApiGateway.csproj" />
+  </Folder>
   <Folder Name="/tests/Order/">
     <Project Path="tests\Order.FlowTests\Order.FlowTests.csproj" />
   </Folder>

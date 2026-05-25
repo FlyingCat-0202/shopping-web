@@ -84,49 +84,68 @@
   <section class="products-region" aria-label="Products">
     <div class="catalog-toolbar">
       <div class="catalog-summary">
-        <p>
-          <span>{{ productTotal() }}</span> {{ searchActive() ? 'search matches' : 'products' }}
-          <span *ngIf="productTotal() > 0"> / showing {{ productRangeStart() }}-{{ productRangeEnd() }}</span>
-          <span class="connection-state" [class.is-offline]="connectionState() === 'offline'">
-            - {{ connectionState() }}
-          </span>
+        <p class="catalog-count">
+          <ng-container *ngIf="productTotal() > 0; else noProducts">
+            <strong>{{ productRangeStart() }}-{{ productRangeEnd() }}</strong>
+            <span>of {{ productTotal() }} {{ searchActive() ? 'matches' : 'products' }}</span>
+          </ng-container>
+          <ng-template #noProducts>No products</ng-template>
         </p>
+        <span
+          class="connection-state"
+          *ngIf="connectionState() !== 'live'"
+          [class.is-offline]="connectionState() === 'offline'"
+        >
+          {{ connectionState() }}
+        </span>
         <p *ngIf="searchActive()">Searching for "{{ searchAppliedKeyword() }}"</p>
       </div>
-      <form class="search-form" (ngSubmit)="searchProducts()">
-        <label class="search-field">
-          <span>Search</span>
-          <input
-            name="searchKeyword"
-            type="search"
-            [ngModel]="searchKeyword()"
-            (ngModelChange)="searchKeyword.set($event)"
-            placeholder="Product, category, description"
-          />
-        </label>
-        <button class="secondary-button" type="submit" [disabled]="searchLoading()">
-          {{ searchLoading() ? 'Searching...' : 'Search' }}
-        </button>
-        <button class="secondary-button" *ngIf="searchActive()" type="button" (click)="clearSearch()">Clear</button>
-      </form>
-      <label>
-        Sort
-        <select [ngModel]="selectedSort()" (ngModelChange)="setSort($event)">
-          <option value="featured">Response order</option>
-          <option value="price-asc">Price low to high</option>
-          <option value="price-desc">Price high to low</option>
-          <option value="name">Name</option>
-        </select>
-      </label>
-      <label>
-        Per page
-        <select [ngModel]="productPageSize()" (ngModelChange)="setProductPageSize($event)">
-          <option [ngValue]="12">12</option>
-          <option [ngValue]="24">24</option>
-          <option [ngValue]="36">36</option>
-          <option [ngValue]="48">48</option>
-        </select>
-      </label>
+      <div class="catalog-actions">
+        <form class="search-form" (ngSubmit)="searchProducts()">
+          <label class="search-field">
+            <span>Search</span>
+            <input
+              name="searchKeyword"
+              type="search"
+              [ngModel]="searchKeyword()"
+              (ngModelChange)="searchKeyword.set($event)"
+              placeholder="Product, category, description"
+            />
+          </label>
+          <button class="secondary-button" type="submit" [disabled]="searchLoading()">
+            {{ searchLoading() ? 'Searching...' : 'Search' }}
+          </button>
+          <button class="secondary-button" *ngIf="searchActive()" type="button" (click)="clearSearch()">Clear</button>
+        </form>
+        <div class="sort-menu" [class.is-open]="sortMenuOpen()" (keydown.escape)="closeSortMenu()">
+          <button
+            class="sort-trigger"
+            type="button"
+            aria-haspopup="listbox"
+            [attr.aria-expanded]="sortMenuOpen()"
+            (click)="toggleSortMenu()"
+          >
+            <span class="sort-kicker">Sort</span>
+            <span class="sort-value">{{ selectedSortLabel() }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          <div class="sort-options" *ngIf="sortMenuOpen()" role="listbox" aria-label="Sort products">
+            <button
+              class="sort-option"
+              *ngFor="let option of sortOptions; trackBy: trackBySortOption"
+              type="button"
+              role="option"
+              [class.is-selected]="selectedSort() === option.value"
+              [attr.aria-selected]="selectedSort() === option.value"
+              (click)="setSort(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="product-grid" *ngIf="visibleProducts().length > 0; else emptyCatalog">
@@ -164,18 +183,47 @@
       </article>
     </div>
 
-    <nav class="inline-actions" *ngIf="productTotalPages() > 1" aria-label="Product pagination">
-      <button class="secondary-button" type="button" [disabled]="productPage() <= 1 || searchLoading()" (click)="goToProductPage(productPage() - 1)">
-        Previous
-      </button>
-      <span>Page {{ productPage() }} / {{ productTotalPages() }}</span>
+    <nav class="premium-pagination" *ngIf="productTotalPages() > 1" aria-label="Product pagination">
       <button
-        class="secondary-button"
+        class="paginator-btn"
         type="button"
+        aria-label="Previous page"
+        [disabled]="productPage() <= 1 || searchLoading()"
+        (click)="goToProductPage(productPage() - 1)"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+      </button>
+
+      <ng-container *ngFor="let item of paginationItems(); trackBy: trackByPaginationItem">
+        <button
+          *ngIf="isPaginationPage(item); else paginationEllipsis"
+          class="paginator-btn"
+          type="button"
+          [class.is-active]="productPage() === item"
+          [attr.aria-current]="productPage() === item ? 'page' : null"
+          [attr.aria-label]="'Page ' + item"
+          [disabled]="searchLoading()"
+          (click)="goToProductPage(item)"
+        >
+          {{ item }}
+        </button>
+        <ng-template #paginationEllipsis>
+          <span class="paginator-ellipsis" aria-hidden="true">...</span>
+        </ng-template>
+      </ng-container>
+
+      <button
+        class="paginator-btn"
+        type="button"
+        aria-label="Next page"
         [disabled]="productPage() >= productTotalPages() || searchLoading()"
         (click)="goToProductPage(productPage() + 1)"
       >
-        Next
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m9 18 6-6-6-6" />
+        </svg>
       </button>
     </nav>
 
@@ -293,36 +341,6 @@
         </form>
       </section>
 
-      <section class="auth-section api-settings">
-        <h3>API endpoints</h3>
-        <form class="stack-form compact-form" (ngSubmit)="saveApiConfig()">
-          <label>
-            Identity API
-            <input name="identity" [(ngModel)]="apiModel.identity" required />
-          </label>
-          <label>
-            Product API
-            <input name="product" [(ngModel)]="apiModel.product" required />
-          </label>
-          <label>
-            Cart API
-            <input name="cart" [(ngModel)]="apiModel.cart" required />
-          </label>
-          <label>
-            Order API
-            <input name="order" [(ngModel)]="apiModel.order" required />
-          </label>
-          <label>
-            Payment API
-            <input name="payment" [(ngModel)]="apiModel.payment" required />
-          </label>
-          <label>
-            Notification API
-            <input name="notification" [(ngModel)]="apiModel.notification" required />
-          </label>
-          <button class="secondary-button" type="submit">Save endpoints</button>
-        </form>
-      </section>
 
       <section class="auth-section" *ngIf="auth() as user">
         <div class="profile-card">

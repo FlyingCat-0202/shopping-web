@@ -85,13 +85,23 @@ var notificationApi = builder.AddProject<Notification_API>("notification-api")
     .WaitFor(rabbitmq)
     .WaitFor(redis);
 
-builder.AddNpmApp("web-store-angular", "../src/Web/web-store-angular", scriptName: "start:aspire")
-    .WithHttpEndpoint(port: 4200, targetPort: 4200, name: "http", isProxied: false)
+var gateway = builder.AddProject<Projects.ApiGateway>("api-gateway")
+    .WithHttpEndpoint(port: 5000, targetPort: 5000, name: "http", isProxied: false)
+    .WithReference(identityApi)
+    .WithReference(productApi)
+    .WithReference(cartApi)
+    .WithReference(orderApi)
+    .WithReference(paymentApi)
+    .WithReference(notificationApi)
     .WaitFor(identityApi)
     .WaitFor(productApi)
     .WaitFor(cartApi)
     .WaitFor(orderApi)
     .WaitFor(paymentApi)
     .WaitFor(notificationApi);
+
+builder.AddNpmApp("web-store-angular", "../src/Web/web-store-angular", scriptName: "start:aspire")
+    .WithHttpEndpoint(port: 4200, targetPort: 4200, name: "http", isProxied: false)
+    .WaitFor(gateway);
 
 builder.Build().Run();

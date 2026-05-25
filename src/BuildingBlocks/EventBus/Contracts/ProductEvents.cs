@@ -30,7 +30,8 @@ public record ProductCreatedEvent(
     string Description,
     decimal Price,
     string CategoryName,
-    bool IsActive
+    bool IsActive,
+    string? ImageUrl = null
 );
 
 public record ProductDeletedEvent(Guid Id);
@@ -40,7 +41,9 @@ public record ProductUpdatedEvent(
     string Name,
     decimal Price,
     bool IsActive,
-    string CategoryName
+    string CategoryName,
+    string? Description = null,
+    string? ImageUrl = null
 );
 
 public record SearchProductRequest(

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiConfig, ApiService, AuthState } from './api.service';
 
@@ -115,6 +115,7 @@ interface Chip {
   imports: [CommonModule, FormsModule],
   templateUrl: './app.html',
   styleUrl: './app.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App implements OnInit {
   private readonly api = inject(ApiService);
@@ -159,15 +160,14 @@ export class App implements OnInit {
   readonly searchLoading = signal(false);
   readonly searchTotal = signal(0);
   readonly searchPage = signal(1);
-  readonly searchPageSize = signal(12);
   readonly catalogPage = signal(1);
-  readonly catalogPageSize = signal(12);
   readonly productEditorOpen = signal(false);
   readonly productSaveBusy = signal(false);
   readonly productDeleteBusy = signal<Record<string, boolean>>({});
   readonly selectedCategory = signal('All');
   readonly selectedStock = signal('All');
   readonly selectedSort = signal('featured');
+  readonly sortMenuOpen = signal(false);
   readonly activeDrawer = signal<'account' | 'cart' | 'notifications' | null>(null);
   readonly checkoutOpen = signal(false);
   readonly authTab = signal<'login' | 'register'>('login');
@@ -178,6 +178,13 @@ export class App implements OnInit {
     { value: 'All', label: 'All' },
     { value: 'InStock', label: 'In stock' },
     { value: 'OutOfStock', label: 'Out of stock' },
+  ];
+
+  readonly sortOptions: Chip[] = [
+    { value: 'featured', label: 'Response order' },
+    { value: 'price-asc', label: 'Price low to high' },
+    { value: 'price-desc', label: 'Price high to low' },
+    { value: 'name', label: 'Name' },
   ];
 
   readonly categoryChips = computed<Chip[]>(() => [
@@ -197,6 +204,9 @@ export class App implements OnInit {
   ]);
 
   readonly searchActive = computed(() => this.searchAppliedKeyword().length > 0);
+  readonly selectedSortLabel = computed(
+    () => this.sortOptions.find((option) => option.value === this.selectedSort())?.label ?? 'Response order',
+  );
 
   readonly filteredProducts = computed(() => {
     const category = this.selectedCategory();
@@ -226,13 +236,13 @@ export class App implements OnInit {
 
     if (this.searchActive()) return products;
 
-    const start = (this.catalogPage() - 1) * this.catalogPageSize();
-    return products.slice(start, start + this.catalogPageSize());
+    const start = (this.catalogPage() - 1) * this.productPageSize();
+    return products.slice(start, start + this.productPageSize());
   });
 
   readonly productTotal = computed(() => (this.searchActive() ? this.searchTotal() : this.filteredProducts().length));
   readonly productPage = computed(() => (this.searchActive() ? this.searchPage() : this.catalogPage()));
-  readonly productPageSize = computed(() => (this.searchActive() ? this.searchPageSize() : this.catalogPageSize()));
+  readonly productPageSize = computed(() => 12);
   readonly productTotalPages = computed(() => Math.max(1, Math.ceil(this.productTotal() / this.productPageSize())));
   readonly productRangeStart = computed(() =>
     this.productTotal() === 0 ? 0 : (this.productPage() - 1) * this.productPageSize() + 1,
@@ -240,6 +250,29 @@ export class App implements OnInit {
   readonly productRangeEnd = computed(() =>
     Math.min(this.productRangeStart() + this.visibleProducts().length - 1, this.productTotal()),
   );
+  readonly paginationItems = computed<Array<number | string>>(() => {
+    const totalPages = this.productTotalPages();
+    const currentPage = this.productPage();
+
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const items: Array<number | string> = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    if (start > 2) items.push('ellipsis-left');
+
+    for (let page = start; page <= end; page++) {
+      items.push(page);
+    }
+
+    if (end < totalPages - 1) items.push('ellipsis-right');
+
+    items.push(totalPages);
+    return items;
+  });
 
   readonly isAdmin = computed(() => this.auth()?.role.toLowerCase() === 'admin');
   readonly currentUserId = computed(() => this.auth()?.userId.toLowerCase() ?? '');
@@ -250,13 +283,16 @@ export class App implements OnInit {
       product: this.findProduct(item.productId) ?? this.placeholderProduct(item.productId, item.quantity),
     })),
   );
+  readonly cartQuantityByProduct = computed(
+    () => new Map(this.cart().map((item) => [item.productId, item.quantity] as const)),
+  );
 
   readonly cartCount = computed(() => this.cart().reduce((sum, item) => sum + item.quantity, 0));
   readonly cartTotal = computed(() =>
     this.cartLines().reduce((sum, line) => sum + line.product.price * line.quantity, 0),
   );
 
-  apiModel: ApiConfig = { ...this.apiConfig() };
+
   loginModel = { emailOrPhone: 'admin@shopping.local', password: 'Admin123' };
   registerModel = { fullName: '', email: '', phoneNumber: '', password: '' };
   categoryModel = { name: '', description: '' };
@@ -412,16 +448,7 @@ export class App implements OnInit {
     this.showToast('Logged out.');
   }
 
-  async saveApiConfig(): Promise<void> {
-    this.apiConfig.set(this.api.saveApiConfig(this.apiModel));
-    this.apiModel = { ...this.apiConfig() };
-    await this.loadCatalog();
-    await this.loadPaymentProviders();
-    await this.loadCart();
-    await this.loadOrders();
-    await this.loadNotifications(false);
-    this.showToast('API endpoints saved.');
-  }
+
 
   async loadNotifications(showErrors = true): Promise<void> {
     if (!this.auth()) {
@@ -548,7 +575,7 @@ export class App implements OnInit {
       const params = new URLSearchParams({
         Keyword: keyword,
         Page: String(nextPage),
-        PageSize: String(this.searchPageSize()),
+        PageSize: String(this.productPageSize()),
       });
       const payload = await this.api.request<any>('product', `/api/products/search?${params.toString()}`);
       const items = payload.items ?? payload.Items ?? [];
@@ -564,8 +591,8 @@ export class App implements OnInit {
       }
     } catch (error) {
       const fallbackMatches = this.localSearch(keyword);
-      const start = (nextPage - 1) * this.searchPageSize();
-      const fallbackProducts = fallbackMatches.slice(start, start + this.searchPageSize());
+      const start = (nextPage - 1) * this.productPageSize();
+      const fallbackProducts = fallbackMatches.slice(start, start + this.productPageSize());
       this.searchAppliedKeyword.set(keyword);
       this.searchResults.set(fallbackProducts);
       this.searchTotal.set(fallbackMatches.length);
@@ -596,19 +623,6 @@ export class App implements OnInit {
     }
 
     this.catalogPage.set(nextPage);
-  }
-
-  setProductPageSize(value: number | string): void {
-    const pageSize = Math.max(1, Number(value) || 12);
-
-    if (this.searchActive()) {
-      this.searchPageSize.set(pageSize);
-      void this.searchProducts(1, false);
-      return;
-    }
-
-    this.catalogPageSize.set(pageSize);
-    this.catalogPage.set(1);
   }
 
   async addToCart(product: Product): Promise<void> {
@@ -1040,7 +1054,16 @@ export class App implements OnInit {
 
   setSort(value: string): void {
     this.selectedSort.set(value);
+    this.sortMenuOpen.set(false);
     this.resetProductPage();
+  }
+
+  toggleSortMenu(): void {
+    this.sortMenuOpen.update((isOpen) => !isOpen);
+  }
+
+  closeSortMenu(): void {
+    this.sortMenuOpen.set(false);
   }
 
   openAccount(): void {
@@ -1089,7 +1112,7 @@ export class App implements OnInit {
   }
 
   cartQuantity(productId: string): number {
-    return this.cart().find((item) => item.productId === productId)?.quantity ?? 0;
+    return this.cartQuantityByProduct().get(productId) ?? 0;
   }
 
   canAdd(product: Product): boolean {
@@ -1171,8 +1194,20 @@ export class App implements OnInit {
     return chip.value;
   }
 
+  trackBySortOption(_: number, option: Chip): string {
+    return option.value;
+  }
+
   trackByProduct(_: number, product: Product): string {
     return product.id;
+  }
+
+  trackByPaginationItem(_: number, item: number | string): string {
+    return String(item);
+  }
+
+  isPaginationPage(item: number | string): item is number {
+    return typeof item === 'number';
   }
 
   trackByCartLine(_: number, line: CartLine): string {

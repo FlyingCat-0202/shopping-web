@@ -126,7 +126,6 @@ builder.Services.AddHttpClient<IAiEmbeddingService, LocalEmbeddingService>();
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync<ProductDbContext>();
-//await ProductSeedData.SeedAsync(app);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();
