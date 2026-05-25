@@ -13,12 +13,12 @@ public static class ElasticConfigurator
             var existsResponse = await elasticClient.Indices.ExistsAsync(indexName);
 
             // Mở comment để đập đi xây lại (Chạy 1 lần rồi comment lại)
-            //if (existsResponse.Exists)
-            //{
-            //    await elasticClient.Indices.DeleteAsync(indexName);
-            //    logger.LogWarning($"Đã xóa index cũ: {indexName}");
-            //    existsResponse = await elasticClient.Indices.ExistsAsync(indexName);
-            //}
+            if (existsResponse.Exists)
+            {
+                await elasticClient.Indices.DeleteAsync(indexName);
+                logger.LogWarning($"Đã xóa index cũ: {indexName}");
+                existsResponse = await elasticClient.Indices.ExistsAsync(indexName);
+            }
 
             if (!existsResponse.Exists)
             {

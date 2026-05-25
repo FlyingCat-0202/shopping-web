@@ -20,7 +20,8 @@ public static class ProductSeedData
             ["Áo"] = "Áo thun, áo sơ mi, áo khoác và hoodie.",
             ["Quần"] = "Quần jeans, quần kaki, quần short và jogger.",
             ["Giày"] = "Giày sneaker, giày chạy bộ và sandal.",
-            ["Phụ kiện"] = "Túi, nón, ví, thắt lưng và phụ kiện thời trang."
+            ["Phụ kiện"] = "Túi, nón, ví, thắt lưng và phụ kiện thời trang.",
+            ["Đồ lót"] = "Quần xì, quần lót, quần xilip, áo vú, áo lá, áo ngực."
         };
 
         await EnsureCategoriesAsync(dbContext, categoryDefinitions);
@@ -259,6 +260,44 @@ public static class ProductSeedData
             35,
             "Sản phẩm phụ kiện dùng để test giỏ hàng với nhiều món nhỏ.",
             "https://images.unsplash.com/photo-1521369909029-2afed882baee"))
+        {
+            yield return seed;
+        }
+
+        foreach (var seed in CreateSeeds(
+            "Đồ lót",
+            [
+                "Quần xì nam cotton",
+                "Quần lót nam boxer",
+                "Quần lót nam tam giác",
+                "Quần lót nữ trơn",
+                "Quần lót nữ ren",
+                "Quần xilip cạp cao",
+                "Quần xilip không viền",
+                "Áo vú mút mỏng",
+                "Áo vú nâng ngực",
+                "Áo vú thể thao",
+                "Áo vú không gọng",
+                "Áo ngực ren cao cấp",
+                "Áo ngực cotton basic",
+                "Áo ngực bralette",
+                "Áo lá học sinh",
+                "Áo lá croptop",
+                "Áo lá hai dây",
+                "Quần lót thun lạnh",
+                "Quần lót su đúc",
+                "Quần sịp đùi nam",
+                "Quần lót tàng hình",
+                "Áo ngực quây",
+                "Áo ngực dán",
+                "Áo lót mặc trong",
+                "Set đồ lót cotton"
+            ],
+            40000,
+            5000,
+            50,
+            "Sản phẩm nhóm đồ lót mặc trong, thoải mái, thấm hút mồ hôi.",
+            "https://images.unsplash.com/photo-1596561073167-93043c983a00"))
         {
             yield return seed;
         }
