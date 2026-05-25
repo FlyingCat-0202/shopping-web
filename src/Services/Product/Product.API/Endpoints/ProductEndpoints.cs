@@ -300,7 +300,7 @@ public static class ProductEndpoints
 
                 // 2. Thực hiện Hybrid Search
                 var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s => s
-                    .Index("products")
+                    .Indices("products")
                     .From(from)
                     .Size(request.PageSize)
                     .Query(q => q
@@ -310,14 +310,14 @@ public static class ProductEndpoints
                             b.Should(
                                 sh1 => sh1.ScriptScore(ss => ss
                                     .Query(q2 => q2.MatchAll())
-                                    .Script(new Script(new InlineScript(
-                                        "doc['nameEmbeddingVector'].isEmpty() ? 0.0 : cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0")
+                                    .Script(new Script
                                     {
+                                        Source = "doc['nameEmbeddingVector'].isEmpty() ? 0.0 : cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0",
                                         Params = new Dictionary<string, object>
                                         {
-                                    { "queryVector", queryVector! }
+                                            { "queryVector", queryVector! }
                                         }
-                                    }))
+                                    })
                                 ),
 
                                 sh2 => sh2.MultiMatch(mm => mm
