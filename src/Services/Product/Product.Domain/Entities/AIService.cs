@@ -15,3 +15,11 @@ public record GeminiEmbeddingResponse(
 public record EmbeddingData(
     [property: JsonPropertyName("values")] float[] Values
 );
+
+public record InfinityEmbeddingResponse(
+    [property: JsonPropertyName("data")] List<InfinityEmbeddingData> Data
+);
+
+public record InfinityEmbeddingData(
+    [property: JsonPropertyName("embedding")] float[] Embedding
+);

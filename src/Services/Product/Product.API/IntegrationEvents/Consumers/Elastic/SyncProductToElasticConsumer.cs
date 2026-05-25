@@ -16,7 +16,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
         try
         {
             //await Task.Delay(4200);
-            float[] vector = await aiEmbeddingService.GetVectorAsync(message.Name);
+            float[] queryVector = await aiEmbeddingService.GetVectorAsync(message.Name);
             var doc = new ProductEsDocument(
                 Id: message.Id,
                 Name: message.Name,
@@ -25,7 +25,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
                 IsActive: message.IsActive,
                 Description: "",
                 ImageUrl: "",
-                NameEmbeddingVector: vector
+                NameEmbeddingVector: (queryVector != null && queryVector.Length > 0) ? queryVector : null
             );
 
             var response = await e.IndexAsync(doc, idx => idx

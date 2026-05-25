@@ -11,7 +11,7 @@ public static class ElasticConfigurator
         try
         {
             var existsResponse = await elasticClient.Indices.ExistsAsync(indexName);
-            
+
             // Mở comment để đập đi xây lại (Chạy 1 lần rồi comment lại)
             //if (existsResponse.Exists)
             //{
@@ -19,7 +19,7 @@ public static class ElasticConfigurator
             //    logger.LogWarning($"Đã xóa index cũ: {indexName}");
             //    existsResponse = await elasticClient.Indices.ExistsAsync(indexName);
             //}
-            
+
             if (!existsResponse.Exists)
             {
                 var createResponse = await elasticClient.Indices.CreateAsync(indexName, c => c
@@ -36,7 +36,7 @@ public static class ElasticConfigurator
                             // Tham số 1: Trỏ đến thuộc tính
                             // Tham số 2: Cấu hình chi tiết
                             .DenseVector(v => v.NameEmbeddingVector, d => d
-                                .Dims(3072)
+                                .Dims(368)
                                 .Index(true)
                                 .Similarity("cosine")
                             )

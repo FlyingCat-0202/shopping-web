@@ -11,7 +11,7 @@ using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.Seed;
 using Product.Domain.Entities;
 using Product.Infrastructure.Data;
-using Product.Infrastructure.Gemini;
+using Product.Infrastructure.AISearch;
 
 namespace Product.API.Endpoints;
 
@@ -252,7 +252,7 @@ public static class ProductEndpoints
         .RequireAuthorization(EndpointHelpers.AdminOnly)
         .AddEndpointFilter<IdempotencyFilter>();
 
-        group.MapGet("/search", async (
+        group.MapGet("/search", async Task<IResult> (
             [AsParameters] SearchProductRequest request,
             ProductDbContext db,
             ElasticsearchClient elasticClient,
@@ -265,65 +265,99 @@ public static class ProductEndpoints
             var keyword = request.Keyword?.Trim() ?? string.Empty;
             var from = (page - 1) * pageSize;
 
+            // 1. Giả lập danh sách danh mục (Nên lấy từ Cache/DB)
+            var existingCategories = await db.Categories
+                                             .Select(p => p.Name)
+                                             .ToListAsync(cancellationToken);
+
+            // 2. Kiểm tra xem người dùng có gõ tên danh mục nào không
+            string? targetCategory = null;
+
+            if (request.Keyword is not null)
+            {
+                string normalizedKeyword = EndpointHelpers.NormalizeVietnamese(request.Keyword);
+
+                foreach (var cat in existingCategories)
+                {
+                    if (normalizedKeyword.Contains(EndpointHelpers.NormalizeVietnamese(cat)))
+                    {
+                        targetCategory = cat;
+                        break;
+                    }
+                }
+            }
+
             try
             {
+                // SỬA LỖI CS1955: Nếu keyword rỗng, gọi thẳng hàm tìm kiếm Database thay vì MatchAllQuery()
                 if (string.IsNullOrWhiteSpace(request.Keyword))
                 {
-                    // Tùy logic của bạn: Có thể báo lỗi BadRequest, hoặc trả về danh sách sản phẩm mặc định
-                    return Results.BadRequest("Từ khóa tìm kiếm không được để trống.");
+                    return await SearchProductsFromDatabase(db, keyword, page, pageSize, cancellationToken);
                 }
 
-                // 1. Lấy vector của từ khóa từ AI Model (ví dụ: Gemini API)
+                // 1. Lấy vector của từ khóa từ AI Model 
                 float[] queryVector = await _aiEmbeddingService.GetVectorAsync(request.Keyword);
 
                 // 2. Thực hiện Hybrid Search
                 var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s => s
-                .Indices("products")
-                .From(from)
-                .Size(request.PageSize)
-                .Query(q => q
-                    .Bool(b => b
-                        .Filter(f => f
-                            .Term(t => t.Field(p => p.IsActive).Value(true))
-                        )
-                        .Should(
-                            // Vector search
-                            sh1 => sh1.ScriptScore(ss => ss
-                                .Query(q2 => q2.MatchAll())
-                                .Script(new Script(new InlineScript(
-                                    "cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0")
-                                {
-                                    Params = new Dictionary<string, object>
+                    .Index("products")
+                    .From(from)
+                    .Size(request.PageSize)
+                    .Query(q => q
+                        .Bool(b =>
+                        {
+                            // CẤU HÌNH SHOULD: Vector search & BM25
+                            b.Should(
+                                sh1 => sh1.ScriptScore(ss => ss
+                                    .Query(q2 => q2.MatchAll())
+                                    .Script(new Script(new InlineScript(
+                                        "doc['nameEmbeddingVector'].isEmpty() ? 0.0 : cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0")
                                     {
-                                        { "queryVector", queryVector! }
-                                    }
-                                }))
-                            ),
+                                        Params = new Dictionary<string, object>
+                                        {
+                                    { "queryVector", queryVector! }
+                                        }
+                                    }))
+                                ),
 
-                            // BM25 text search
-                            sh2 => sh2.MultiMatch(mm => mm
-                                .Query(request.Keyword)
-                                .Fields(new[] { "name^3", "categoryName" })
-                                .Fuzziness(new Fuzziness("AUTO"))
-                            )
-                        )
-                    )
-                ),
-                cancellationToken
-            );
+                                sh2 => sh2.MultiMatch(mm => mm
+                                    .Query(request.Keyword)
+                                    .Fields(new[] { "name^5", "categoryName" })
+                                    .Fuzziness(new Fuzziness("AUTO"))
+                                )
+                            );
+
+                            // CẤU HÌNH FILTER ĐỘNG
+                            if (!string.IsNullOrEmpty(targetCategory))
+                            {
+                                b.Filter(
+                                    f1 => f1.Term(t => t.Field(p => p.IsActive).Value(true)),
+                                    f2 => f2.Term(t => t.Field(p => p.CategoryName).Value(targetCategory))
+                                );
+                            }
+                            else
+                            {
+                                b.Filter(
+                                    f => f.Term(t => t.Field(p => p.IsActive).Value(true))
+                                );
+                            }
+
+                            b.MinimumShouldMatch(1);
+                        })
+                    ),
+                    cancellationToken
+                );
 
                 if (searchResponse.IsValidResponse)
                 {
-                    // Map từ Document (ES) sang Response (DTO)
                     var items = searchResponse.Documents.Select(doc => new ProductResponse(
                         Id: doc.Id,
                         Name: doc.Name,
                         Price: doc.Price,
-                        StockQuantity: 0, // Lưu ý: Nếu bạn muốn hiển thị tồn kho, 
-                                          // ES document cần lưu field này, hoặc query DB để lấy thêm.
+                        StockQuantity: 0,
                         Description: doc.Description,
                         ImageUrl: doc.ImageUrl,
-                        CategoryId: 0, // Nếu ES không lưu CategoryId, bạn cần map lại hoặc lấy từ DB
+                        CategoryId: 0,
                         CategoryName: doc.CategoryName
                     ));
 
@@ -331,7 +365,7 @@ public static class ProductEndpoints
                     {
                         TotalItems = searchResponse.Total,
                         CurrentPage = page,
-                        Items = items // Trả về danh sách đã được "lọc sạch" vector
+                        Items = items
                     });
                 }
 
@@ -344,6 +378,7 @@ public static class ProductEndpoints
                 logger.LogWarning(ex, "Elasticsearch search threw an exception. Falling back to database search.");
             }
 
+            // Fallback cuối cùng nếu Elastic lỗi
             return await SearchProductsFromDatabase(db, keyword, page, pageSize, cancellationToken);
         });
 

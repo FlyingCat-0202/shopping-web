@@ -11,8 +11,8 @@ using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
 using Product.API.Validators;
 using Product.Domain.Entities;
+using Product.Infrastructure.AISearch;
 using Product.Infrastructure.Data;
-using Product.Infrastructure.Gemini;
 using ServiceDefault;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,6 +39,7 @@ builder.Services.AddDbContext<ProductDbContext>(options =>
 builder.AddApiServiceDefaults();
 builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
 builder.Services.AddScoped<IStockReservationService, StockReservationService>();
+
 // >>> THÊM ĐOẠN CODE NÀY VÀO ĐÂY <<<
 var elasticUri = builder.Configuration.GetConnectionString("elasticsearch")
                  ?? "http://localhost:9200"; // Đổi port tùy theo Docker của bạn
@@ -127,6 +128,7 @@ builder.Services.AddMassTransit(x =>
 
         cfg.ReceiveEndpoint("elastic-search", e =>
         {
+            e.ConcurrentMessageLimit = 2;
             e.ConfigureConsumer<SyncProductToElasticConsumer>(context);
         });
     });
@@ -138,7 +140,7 @@ var redisConnectionString = builder.Configuration.GetConnectionString("redis") ?
                             throw new InvalidOperationException("Missing connection string for redis");
 builder.Services.AddRedisIdempotency(redisConnectionString);
 
-builder.Services.AddHttpClient<IAiEmbeddingService, GeminiEmbeddingService>();
+builder.Services.AddHttpClient<IAiEmbeddingService, LocalEmbeddingService>();
 
 var app = builder.Build();
 

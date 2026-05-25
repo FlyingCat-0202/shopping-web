@@ -20,6 +20,15 @@ var redis = builder.AddRedis("redis");
 var elasticsearch = builder.AddElasticsearch("elasticsearch")
     .WithDataVolume();
 
+var infinityApi = builder.AddContainer("infinity-ai", "michaelf34/infinity")
+    .WithImageTag("latest")
+    // Map port nội bộ 7997 ra ngoài (bạn có thể đổi port ngoài nếu trùng)
+    .WithHttpEndpoint(port: 7997, targetPort: 7997, name: "api")
+    .WithEnvironment("MODEL_ID", "BAAI/bge-m3") // Chỉ định tải model BGE-M3
+    .WithEnvironment("PORT", "7997");
+     //Tùy chọn: Nếu máy bạn CÓ CARD ĐỒ HỌA NVIDIA (GPU), hãy mở comment dòng dưới để chạy nhanh gấp 10 lần
+     //.WithEnvironment("DEVICE", "cuda");
+
 // ── Databases (mỗi service dùng DB riêng) ────────────────────────────────────
 var orderDb = postgres.AddDatabase("order-db");
 var productDb = postgres.AddDatabase("product-db");
@@ -47,7 +56,7 @@ var productApi = builder.AddProject<Product_API>("product-api")
     .WithReference(rabbitmq)
     .WithReference(redis)
     .WithReference(elasticsearch)
-    .WaitFor(productDb)
+    .WithReference(infinityApi.GetEndpoint("api")).WaitFor(productDb)
     .WaitFor(rabbitmq)
     .WaitFor(redis)
     .WaitFor(elasticsearch);    
