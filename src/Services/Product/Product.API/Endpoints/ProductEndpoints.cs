@@ -310,14 +310,14 @@ public static class ProductEndpoints
                             b.Should(
                                 sh1 => sh1.ScriptScore(ss => ss
                                     .Query(q2 => q2.MatchAll())
-                                    .Script(new Script(new InlineScript(
-                                        "doc['nameEmbeddingVector'].isEmpty() ? 0.0 : cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0")
+                                    .Script(new Script
                                     {
+                                        Source = "doc['nameEmbeddingVector'].isEmpty() ? 0.0 : cosineSimilarity(params.queryVector, 'nameEmbeddingVector') + 1.0",
                                         Params = new Dictionary<string, object>
                                         {
-                                    { "queryVector", queryVector! }
+                                            { "queryVector", queryVector! }
                                         }
-                                    }))
+                                    })
                                 ),
 
                                 sh2 => sh2.MultiMatch(mm => mm

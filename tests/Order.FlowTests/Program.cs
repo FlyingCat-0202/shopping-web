@@ -1,20 +1,16 @@
 using EventBus.Contracts;
 using MassTransit;
-using Order.API.IntegrationEvents.Consumer;
-using Order.Domain.Entities;
+using Order.API.Saga;
 using Order.Domain.Enums;
 
 var tests = new (string Name, Action Run)[]
 {
-    ("Saga only consumes real flow events", SagaOnlyConsumesRealFlowEvents),
-    ("Stock fail cancels order", StockFailCancelsOrder),
-    ("Online payment success completes order", OnlinePaymentSuccessCompletesOrder),
-    ("Online payment fail releases stock", OnlinePaymentFailReleasesStock),
-    ("COD success completes without payment", CodSuccessCompletesWithoutPayment),
-    ("Order timeout fails pending saga", OrderTimeoutFailsPendingSaga),
-    ("Manual online cancel waits for stock release", ManualOnlineCancelWaitsForStockRelease),
-    ("Payment success can complete before payment-created event", PaymentSuccessCanCompleteBeforePaymentCreatedEvent),
-    ("Saga rejects state regression", SagaRejectsStateRegression)
+    ("State machine exposes real flow events", StateMachineExposesRealFlowEvents),
+    ("COD processing order can be cancelled before shipping", CodProcessingOrderCanBeCancelled),
+    ("Online paid processing order cannot be cancelled without refund flow", OnlinePaidProcessingOrderCannotBeCancelled),
+    ("Online payment pending order can be cancelled", OnlinePaymentPendingOrderCanBeCancelled),
+    ("Stock timeout cancels pending order", StockTimeoutCancelsPendingOrder),
+    ("Payment success can process before payment-created event", PaymentSuccessCanProcessBeforePaymentCreatedEvent)
 };
 
 foreach (var test in tests)
@@ -23,170 +19,86 @@ foreach (var test in tests)
     Console.WriteLine($"[PASS] {test.Name}");
 }
 
-static void SagaOnlyConsumesRealFlowEvents()
+static void StateMachineExposesRealFlowEvents()
 {
-    var consumerInterfaces = typeof(OrderSagaConsumer)
-        .GetInterfaces()
-        .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IConsumer<>))
-        .Select(i => i.GetGenericArguments()[0])
+    var eventTypes = typeof(OrderStateMachine)
+        .GetProperties()
+        .Where(p => p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Event<>))
+        .Select(p => p.PropertyType.GetGenericArguments()[0])
         .OrderBy(t => t.Name)
         .ToArray();
 
     var expectedEvents = new[]
     {
+        typeof(CancelOrderCommand),
         typeof(OrderSubmittedEvent),
         typeof(PaymentCreatedEvent),
         typeof(PaymentFailedEvent),
         typeof(PaymentSucceededEvent),
+        typeof(PaymentTimeoutExpired),
         typeof(StockReleasedEvent),
         typeof(StockReservationFailedEvent),
-        typeof(StockReservedEvent)
+        typeof(StockReservedEvent),
+        typeof(StockTimeoutExpired)
     }.OrderBy(t => t.Name).ToArray();
 
-    AssertSequenceEqual(expectedEvents, consumerInterfaces, "OrderSagaConsumer event subscriptions");
-    AssertFalse(consumerInterfaces.Contains(typeof(OrderStatusChangedEvent)), "Saga must not consume OrderStatusChangedEvent");
+    AssertSequenceEqual(expectedEvents, eventTypes, "OrderStateMachine event subscriptions");
+    AssertFalse(eventTypes.Contains(typeof(OrderStatusChangedEvent)), "Saga must not consume OrderStatusChangedEvent");
 }
 
-static void StockFailCancelsOrder()
-{
-    var order = CreateOrder(PaymentMethodType.MeiMei);
-    var saga = StartSaga(order);
-
-    saga.MoveTo(OrderSagaSteps.StockReservationPending);
-    order.CancelDueToStockFailure();
-    saga.Fail("Out of stock");
-
-    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status");
-    AssertEqual(OrderSagaSteps.Failed, saga.CurrentStep, "Saga step");
-    AssertTrue(saga.IsCompleted, "Saga completed");
-}
-
-static void OnlinePaymentSuccessCompletesOrder()
-{
-    var order = CreateOrder(PaymentMethodType.MeiMei);
-    var saga = StartSaga(order);
-
-    saga.MoveTo(OrderSagaSteps.StockReservationPending);
-    order.MarkStockReserved(PriceMap(order, 120_000m));
-    saga.StockReservedAt = DateTime.UtcNow;
-    saga.TotalAmount = order.TotalAmount;
-    saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
-
-    saga.PaymentCreatedAt = DateTime.UtcNow;
-    saga.MoveTo(OrderSagaSteps.PaymentPending);
-
-    order.ConfirmPayment();
-    saga.Complete();
-
-    AssertEqual(OrderStatus.Processing, order.Status, "Order status");
-    AssertEqual(240_000m, order.TotalAmount, "Order total");
-    AssertEqual(OrderSagaSteps.Completed, saga.CurrentStep, "Saga step");
-    AssertTrue(saga.IsCompleted, "Saga completed");
-}
-
-static void OnlinePaymentFailReleasesStock()
-{
-    var order = CreateOrder(PaymentMethodType.MeilyMeily);
-    var saga = StartSaga(order);
-
-    saga.MoveTo(OrderSagaSteps.StockReservationPending);
-    order.MarkStockReserved(PriceMap(order, 80_000m));
-    saga.StockReservedAt = DateTime.UtcNow;
-    saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
-
-    saga.PaymentCreatedAt = DateTime.UtcNow;
-    saga.MoveTo(OrderSagaSteps.PaymentPending);
-
-    order.CancelDueToPaymentFailure();
-    saga.MoveTo(OrderSagaSteps.StockReleasePending);
-
-    saga.Fail("Payment failed and stock released");
-
-    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status");
-    AssertEqual(OrderSagaSteps.Failed, saga.CurrentStep, "Saga step");
-    AssertTrue(saga.IsCompleted, "Saga completed");
-}
-
-static void CodSuccessCompletesWithoutPayment()
+static void CodProcessingOrderCanBeCancelled()
 {
     var order = CreateOrder(PaymentMethodType.COD);
-    var saga = StartSaga(order);
 
-    saga.MoveTo(OrderSagaSteps.StockReservationPending);
     order.MarkStockReserved(PriceMap(order, 55_000m));
-    saga.StockReservedAt = DateTime.UtcNow;
-    saga.TotalAmount = order.TotalAmount;
-    saga.Complete();
-
-    AssertEqual(OrderStatus.Processing, order.Status, "Order status");
-    AssertEqual(110_000m, order.TotalAmount, "Order total");
-    AssertEqual(OrderSagaSteps.Completed, saga.CurrentStep, "Saga step");
-    AssertTrue(saga.IsCompleted, "Saga completed");
-}
-
-static void OrderTimeoutFailsPendingSaga()
-{
-    var order = CreateOrder(PaymentMethodType.MeiMei);
-    var saga = StartSaga(order);
-
-    order.CancelDueToStockFailure();
-    saga.Fail("Order timeout while waiting for stock reservation.");
-
-    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status");
-    AssertEqual(OrderSagaSteps.Failed, saga.CurrentStep, "Saga step");
-    AssertTrue(saga.IsCompleted, "Saga completed");
-}
-
-static void ManualOnlineCancelWaitsForStockRelease()
-{
-    var order = CreateOrder(PaymentMethodType.MeiMei);
-    var saga = StartSaga(order);
-
-    order.MarkStockReserved(PriceMap(order, 100_000m));
-    saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
-    saga.MoveTo(OrderSagaSteps.PaymentPending);
+    AssertEqual(OrderStatus.Processing, order.Status, "Order status after stock reserved");
+    AssertTrue(order.CanCancel(), "COD processing order can cancel");
 
     order.Cancel();
-    saga.MoveTo(OrderSagaSteps.StockReleasePending);
-
-    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status");
-    AssertEqual(OrderSagaSteps.StockReleasePending, saga.CurrentStep, "Saga step before stock release");
-    AssertFalse(saga.IsCompleted, "Saga completed before stock release");
-
-    saga.Fail("Customer cancelled order.");
-
-    AssertEqual(OrderSagaSteps.Failed, saga.CurrentStep, "Saga step after stock release");
-    AssertTrue(saga.IsCompleted, "Saga completed after stock release");
+    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status after cancel");
 }
 
-static void PaymentSuccessCanCompleteBeforePaymentCreatedEvent()
-{
-    var order = CreateOrder(PaymentMethodType.MeilyMeily);
-    var saga = StartSaga(order);
-
-    order.MarkStockReserved(PriceMap(order, 100_000m));
-    saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
-
-    order.ConfirmPayment();
-    saga.Complete();
-
-    AssertEqual(OrderStatus.Processing, order.Status, "Order status");
-    AssertEqual(OrderSagaSteps.Completed, saga.CurrentStep, "Saga step");
-    AssertTrue(saga.IsCompleted, "Saga completed");
-}
-
-static void SagaRejectsStateRegression()
+static void OnlinePaidProcessingOrderCannotBeCancelled()
 {
     var order = CreateOrder(PaymentMethodType.MeiMei);
-    var saga = StartSaga(order);
 
     order.MarkStockReserved(PriceMap(order, 100_000m));
-    saga.MoveTo(OrderSagaSteps.PaymentCreationPending);
-    saga.MoveTo(OrderSagaSteps.PaymentPending);
+    order.ConfirmPayment();
 
-    AssertThrows<InvalidOperationException>(
-        () => saga.MoveTo(OrderSagaSteps.PaymentCreationPending),
-        "Saga should reject PaymentPending -> PaymentCreationPending");
+    AssertEqual(OrderStatus.Processing, order.Status, "Order status after payment");
+    AssertFalse(order.CanCancel(), "Online paid processing order can cancel");
+}
+
+static void OnlinePaymentPendingOrderCanBeCancelled()
+{
+    var order = CreateOrder(PaymentMethodType.MeilyMeily);
+
+    order.MarkStockReserved(PriceMap(order, 80_000m));
+    AssertEqual(OrderStatus.PaymentPending, order.Status, "Order status after stock reserved");
+    AssertTrue(order.CanCancel(), "Online payment pending order can cancel");
+
+    order.Cancel();
+    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status after cancel");
+}
+
+static void StockTimeoutCancelsPendingOrder()
+{
+    var order = CreateOrder(PaymentMethodType.MeiMei);
+
+    order.CancelDueToStockFailure();
+
+    AssertEqual(OrderStatus.Cancelled, order.Status, "Order status");
+}
+
+static void PaymentSuccessCanProcessBeforePaymentCreatedEvent()
+{
+    var order = CreateOrder(PaymentMethodType.MeilyMeily);
+
+    order.MarkStockReserved(PriceMap(order, 100_000m));
+    order.ConfirmPayment();
+
+    AssertEqual(OrderStatus.Processing, order.Status, "Order status");
+    AssertEqual(200_000m, order.TotalAmount, "Order total");
 }
 
 static Order.Domain.Entities.Order CreateOrder(PaymentMethodType paymentMethod)
@@ -201,9 +113,6 @@ static Order.Domain.Entities.Order CreateOrder(PaymentMethodType paymentMethod)
     order.AddOrderItem(Guid.NewGuid(), 0m, 2);
     return order;
 }
-
-static OrderSagaState StartSaga(Order.Domain.Entities.Order order)
-    => OrderSagaState.Start(order.Id, order.CustomerId, order.PaymentMethod.ToString());
 
 static Dictionary<Guid, decimal> PriceMap(Order.Domain.Entities.Order order, decimal unitPrice)
     => order.Items.ToDictionary(i => i.ProductId, _ => unitPrice);
@@ -224,21 +133,6 @@ static void AssertFalse(bool value, string name)
 {
     if (value)
         throw new InvalidOperationException($"{name}: expected false");
-}
-
-static void AssertThrows<TException>(Action action, string name)
-    where TException : Exception
-{
-    try
-    {
-        action();
-    }
-    catch (TException)
-    {
-        return;
-    }
-
-    throw new InvalidOperationException($"{name}: expected {typeof(TException).Name}");
 }
 
 static void AssertSequenceEqual<T>(IReadOnlyList<T> expected, IReadOnlyList<T> actual, string name)

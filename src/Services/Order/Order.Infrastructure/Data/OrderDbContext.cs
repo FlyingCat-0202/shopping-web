@@ -10,7 +10,7 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
     public DbSet<OrderEntity> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
     public DbSet<OrderTimelineEvent> OrderTimelineEvents { get; set; } = null!;
-    public DbSet<OrderSagaState> OrderSagaStates { get; set; } = null!;
+    public DbSet<OrderSagaInstance> OrderSagaInstances { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,19 +65,19 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
                   .HasForeignKey(e => e.OrderId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
-        modelBuilder.Entity<OrderSagaState>(entity =>
+
+        // ── MassTransit Saga State (thay thế OrderSagaState cũ) ──────────────
+        modelBuilder.Entity<OrderSagaInstance>(entity =>
         {
-            entity.ToTable("OrderSagaStates", "order");
-            entity.HasKey(s => s.OrderId);
-            entity.Property(s => s.CurrentStep).HasMaxLength(80);
+            entity.ToTable("OrderSagaInstances", "order");
+            entity.HasKey(s => s.CorrelationId);
+            entity.Property(s => s.CurrentState).HasMaxLength(80).IsRequired();
             entity.Property(s => s.PaymentMethod).HasMaxLength(50);
             entity.Property(s => s.FailureReason).HasMaxLength(500);
             entity.Property(s => s.TotalAmount).HasColumnType("decimal(18,2)");
             entity.Property(s => s.Version).IsConcurrencyToken();
-            entity.HasIndex(s => new { s.CurrentStep, s.UpdatedAt })
-                  .HasDatabaseName("IX_OrderSagaStates_CurrentStep_UpdatedAt");
-            entity.HasIndex(s => new { s.IsCompleted, s.UpdatedAt })
-                  .HasDatabaseName("IX_OrderSagaStates_IsCompleted_UpdatedAt");
+            entity.HasIndex(s => new { s.CurrentState, s.UpdatedAt })
+                  .HasDatabaseName("IX_OrderSagaInstances_CurrentState_UpdatedAt");
         });
 
         // MassTransit Outbox

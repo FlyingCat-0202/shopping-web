@@ -16,7 +16,6 @@ public static class OrderEndpoints
 {
     private const string OrderSubmittedRoutingKey = "order-submitted";
     private const string ReleaseStockRoutingKey = "release-stock";
-    private const string CancelPaymentRoutingKey = "cancel-payment";
     private const string OrderStatusChangedRoutingKey = "order-status-changed";
 
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)
@@ -139,7 +138,7 @@ public static class OrderEndpoints
             o.Id, o.OrderDate, o.TotalAmount,
             o.Status.ToString(),
             OrderEntity.ComputePaymentState(o.Status, o.PaymentMethod).ToString(),
-            o.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            CanCancel(o.Status, o.PaymentMethod),
             o.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
                 or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
             o.Status == OrderStatus.Delivered)).ToList();
@@ -181,7 +180,7 @@ public static class OrderEndpoints
             order.PaymentMethod.ToString(),
             order.Status.ToString(),
             OrderEntity.ComputePaymentState(order.Status, order.PaymentMethod).ToString(),
-            order.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            CanCancel(order.Status, order.PaymentMethod),
             order.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
                 or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
             order.Status == OrderStatus.Delivered,
@@ -203,37 +202,34 @@ public static class OrderEndpoints
             .FirstOrDefaultAsync(o => o.Id == id && o.CustomerId == customerId, cancellationToken);
         if (order == null) return Results.NotFound();
 
-        if (!TryApplyStatusChange(order, order.Cancel, out var oldStatus, out var conflict))
-            return conflict!;
+        if (!order.CanCancel())
+            return Results.Conflict(new { message = $"Không thể hủy đơn hàng ở trạng thái {order.Status}." });
 
-        var reason = "Customer cancelled order.";
-        AddStatusTimeline(order, oldStatus, reason, "Customer");
-        await MarkSagaCancellingAsync(db, order, oldStatus, reason, cancellationToken);
-
-        await PublishReleaseStock(
-            publishEndpoint,
-            order,
-            reason,
-            cancellationToken);
-
-        if (oldStatus == OrderStatus.PaymentPending && order.IsOnlinePayment())
+        if (order.Status == OrderStatus.Processing)
         {
-            await PublishCancelPayment(
-                publishEndpoint,
-                order,
-                reason,
-                cancellationToken);
+            if (!TryApplyStatusChange(order, order.Cancel, out var oldStatus, out var conflict))
+                return conflict!;
+
+            var reason = "Customer cancelled COD order before shipping.";
+            AddStatusTimeline(order, oldStatus, reason, "Customer");
+            await PublishReleaseStock(publishEndpoint, order, reason, cancellationToken);
+            await PublishOrderStatusChanged(publishEndpoint, order, oldStatus, reason, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+
+            return Results.Ok(new { message = "Hủy đơn hàng thành công.", OrderId = order.Id });
         }
 
-        await PublishOrderStatusChanged(
-            publishEndpoint,
-            order,
-            oldStatus,
-            reason,
-            cancellationToken);
+        // PaymentPending vẫn thuộc phần create/payment orchestration, để saga xử lý compensation.
+        await publishEndpoint.Publish(new CancelOrderCommand
+        {
+            CorrelationId = order.Id,
+            OrderId = order.Id,
+            CustomerId = customerId,
+            Reason = "Customer cancelled order."
+        }, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
-        return Results.Ok(new { message = "Hủy đơn hàng thành công.", OrderId = order.Id });
+        return Results.Accepted($"/api/order/{order.Id}", new { message = "Yêu cầu hủy đơn hàng đã được gửi.", OrderId = order.Id });
     }
 
     private static async Task<IResult> RequestReturn(
@@ -301,7 +297,7 @@ public static class OrderEndpoints
             o.TotalAmount,
             o.Status.ToString(),
             OrderEntity.ComputePaymentState(o.Status, o.PaymentMethod).ToString(),
-            o.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            CanCancel(o.Status, o.PaymentMethod),
             o.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
                 or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
             o.Status == OrderStatus.Delivered)).ToList();
@@ -346,7 +342,7 @@ public static class OrderEndpoints
             order.PaymentMethod.ToString(),
             order.Status.ToString(),
             OrderEntity.ComputePaymentState(order.Status, order.PaymentMethod).ToString(),
-            order.Status is OrderStatus.PaymentPending or OrderStatus.Processing,
+            CanCancel(order.Status, order.PaymentMethod),
             order.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered
                 or OrderStatus.ReturnRequested or OrderStatus.Returned or OrderStatus.ReturnRejected,
             order.Status == OrderStatus.Delivered,
@@ -366,11 +362,19 @@ public static class OrderEndpoints
             return conflict!;
         AddStatusTimeline(order, oldStatus, "Admin approved return.", "Admin");
 
-        await PublishReleaseStock(
-            publishEndpoint,
-            order,
-            "Admin approved return.",
-            cancellationToken);
+        await publishEndpoint.Publish(new ReleaseStockCommand
+        {
+            CorrelationId = order.Id,
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            Reason = "Admin approved return.",
+            Items = [.. order.Items.Select(od => new OrderItemInfo
+            {
+                ProductId = od.ProductId,
+                Quantity = od.Quantity
+            })]
+        }, cancellationToken);
+
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -479,46 +483,6 @@ public static class OrderEndpoints
             })]
         }, ctx => ctx.SetRoutingKey(ReleaseStockRoutingKey), cancellationToken);
 
-    private static Task PublishCancelPayment(
-        IPublishEndpoint publishEndpoint,
-        OrderEntity order,
-        string reason,
-        CancellationToken cancellationToken)
-        => publishEndpoint.Publish(new CancelPaymentCommand
-        {
-            CorrelationId = order.Id,
-            OrderId = order.Id,
-            CustomerId = order.CustomerId,
-            Amount = order.TotalAmount,
-            PaymentMethod = order.PaymentMethod.ToString(),
-            Reason = reason
-        }, ctx => ctx.SetRoutingKey(CancelPaymentRoutingKey), cancellationToken);
-
-    private static async Task MarkSagaCancellingAsync(
-        OrderDbContext db,
-        OrderEntity order,
-        OrderStatus oldStatus,
-        string reason,
-        CancellationToken cancellationToken)
-    {
-        if (oldStatus != OrderStatus.PaymentPending || !order.IsOnlinePayment())
-            return;
-
-        var saga = await db.OrderSagaStates
-            .FirstOrDefaultAsync(s => s.OrderId == order.Id, cancellationToken);
-
-        if (saga is null)
-        {
-            saga = OrderSagaState.Start(order.Id, order.CustomerId, order.PaymentMethod.ToString());
-            db.OrderSagaStates.Add(saga);
-        }
-
-        if (saga.IsCompleted)
-            return;
-
-        saga.FailureReason = reason;
-        saga.MoveTo(OrderSagaSteps.StockReleasePending);
-    }
     private static void AddStatusTimeline(
         OrderEntity order,
         OrderStatus oldStatus,
@@ -587,6 +551,10 @@ public static class OrderEndpoints
             return false;
         }
     }
+
+    private static bool CanCancel(OrderStatus status, PaymentMethodType paymentMethod)
+        => status == OrderStatus.PaymentPending ||
+           (status == OrderStatus.Processing && paymentMethod == PaymentMethodType.COD);
 
     private sealed record OrderItemGrouping(Guid ProductId, int Quantity);
 }

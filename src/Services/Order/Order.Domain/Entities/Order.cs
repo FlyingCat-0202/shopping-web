@@ -142,7 +142,9 @@ public class Order
     }
 
     // ── Query Helpers ─────────────────────────────────────────────────────────
-    public bool CanCancel() => Status is OrderStatus.PaymentPending or OrderStatus.Processing;
+    public bool CanCancel()
+        => Status == OrderStatus.PaymentPending ||
+           (Status == OrderStatus.Processing && PaymentMethod == PaymentMethodType.COD);
     public bool CanShip() => Status == OrderStatus.Processing;
     public bool CanDeliver() => Status == OrderStatus.Shipped;
     public bool CanRequestReturn() => Status == OrderStatus.Delivered;

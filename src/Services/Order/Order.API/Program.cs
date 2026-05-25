@@ -5,9 +5,9 @@ using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Order.API.Endpoints;
-using Order.API.IntegrationEvents.Consumer;
+using Order.API.Saga;
 using Order.API.Validators;
-using Order.Infrastructure.BackgroundJobs;
+using Order.Domain.Entities;
 using Order.Infrastructure.Data;
 using ServiceDefault;
 
@@ -25,7 +25,7 @@ builder.AddNpgsqlDbContext<OrderDbContext>("order-db", configureDbContextOptions
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.AddApiServiceDefaults();
-builder.Services.AddHostedService<OrderTimeoutService>();
+builder.Services.AddHostedService<OrderSagaTimeoutService>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderValidator>();
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
-// ── MassTransit + RabbitMQ ────────────────────────────────────────────────────
+// ── MassTransit + RabbitMQ + Saga StateMachine ───────────────────────────────
 builder.Services.AddMassTransit(x =>
 {
     x.SetKebabCaseEndpointNameFormatter();
@@ -61,7 +61,13 @@ builder.Services.AddMassTransit(x =>
         o.UseBusOutbox();
     });
 
-    x.AddConsumer<OrderSagaConsumer>();
+    // ── StateMachine Saga (thay thế OrderSagaConsumer + OrderTimeoutService) ─
+    x.AddSagaStateMachine<OrderStateMachine, OrderSagaInstance>()
+        .EntityFrameworkRepository(r =>
+        {
+            r.ExistingDbContext<OrderDbContext>();
+            r.UsePostgres();
+        });
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -71,7 +77,7 @@ builder.Services.AddMassTransit(x =>
         cfg.ReceiveEndpoint("order-saga", e =>
         {
             e.UseEntityFrameworkOutbox<OrderDbContext>(context);
-            e.ConfigureConsumer<OrderSagaConsumer>(context);
+            e.ConfigureSaga<OrderSagaInstance>(context);
         });
     });
 });
