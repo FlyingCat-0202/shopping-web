@@ -321,7 +321,7 @@ public class StockReservedActivity(OrderDbContext db) :
             order.MarkStockReserved(snapshots);
             context.Saga.TotalAmount = order.TotalAmount;
 
-            order.AddTimelineEvent(order.Status, $"Order {order.Status}",
+            SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}",
                 "Kho hàng đã được giữ thành công.", "Saga");
 
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus,
@@ -356,7 +356,7 @@ public class StockFailedActivity(OrderDbContext db) :
         {
             var oldStatus = order.Status;
             order.CancelDueToStockFailure();
-            order.AddTimelineEvent(order.Status, $"Order {order.Status}",
+            SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}",
                 $"Stock reservation failed: {context.Message.Reason}", "Saga");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus,
                 $"Stock reservation failed: {context.Message.Reason}");
@@ -391,7 +391,7 @@ public class PaymentSucceededActivity(OrderDbContext db) :
         {
             var oldStatus = order.Status;
             order.ConfirmPayment();
-            order.AddTimelineEvent(order.Status, $"Order {order.Status}",
+            SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}",
                 "Payment succeeded.", "Saga");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, "Payment succeeded.");
 
@@ -435,7 +435,7 @@ public class PaymentFailedCancelActivity(OrderDbContext db) :
             var oldStatus = order.Status;
             order.CancelDueToPaymentFailure();
             var reason = context.Saga.FailureReason ?? "Payment failed";
-            order.AddTimelineEvent(order.Status, $"Order {order.Status}", reason, "Saga");
+            SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}", reason, "Saga");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, reason);
 
             // Compensation: release stock
@@ -481,7 +481,7 @@ public class TimeoutCancelActivity(OrderDbContext db) :
             var oldStatus = order.Status;
             order.CancelDueToStockFailure();
             var reason = context.Saga.FailureReason ?? "Timeout";
-            order.AddTimelineEvent(order.Status, $"Order {order.Status}", reason, "Saga:Timeout");
+            SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}", reason, "Saga:Timeout");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, reason);
             await db.SaveChangesAsync();
         }
@@ -548,7 +548,7 @@ public class PaymentTimeoutCancelActivity(OrderDbContext db) :
             var oldStatus = order.Status;
             order.CancelDueToPaymentFailure();
             var reason = context.Saga.FailureReason ?? "Payment timeout";
-            order.AddTimelineEvent(order.Status, $"Order {order.Status}", reason, "Saga:Timeout");
+            SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}", reason, "Saga:Timeout");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, reason);
 
             await context.Publish(new CancelPaymentCommand
@@ -589,7 +589,7 @@ public class CancelOrderActivity(OrderDbContext db) :
         {
             var oldStatus = order.Status;
             order.CancelDueToStockFailure();
-            order.AddTimelineEvent(order.Status, $"Order {order.Status}",
+            SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}",
                 context.Message.Reason, "Customer");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, context.Message.Reason);
             await db.SaveChangesAsync();
@@ -624,7 +624,7 @@ public class CancelWithCompensationActivity(OrderDbContext db) :
         {
             var oldStatus = order.Status;
             order.Cancel();
-            order.AddTimelineEvent(order.Status, $"Order {order.Status}",
+            SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}",
                 context.Message.Reason, "Customer");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, context.Message.Reason);
 
@@ -758,6 +758,18 @@ public class ReleaseStockAfterPaymentRefundedActivity(OrderDbContext db) :
 
 internal static class SagaActivityHelper
 {
+    internal static void AddTimelineEvent(
+        OrderDbContext db,
+        Domain.Entities.Order order,
+        OrderStatus status,
+        string title,
+        string description,
+        string source)
+    {
+        var timelineEvent = order.AddTimelineEvent(status, title, description, source);
+        db.OrderTimelineEvents.Add(timelineEvent);
+    }
+
     internal static Task PublishStatusChanged<TSaga, TMessage>(
         BehaviorContext<TSaga, TMessage> context,
         Domain.Entities.Order order,

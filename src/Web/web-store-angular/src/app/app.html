@@ -85,8 +85,8 @@
     <div class="catalog-toolbar">
       <div class="catalog-summary">
         <p>
-          <span>{{ visibleProducts().length }}</span> products
-          <span *ngIf="searchActive()"> / {{ searchTotal() }} search matches</span>
+          <span>{{ productTotal() }}</span> {{ searchActive() ? 'search matches' : 'products' }}
+          <span *ngIf="productTotal() > 0"> / showing {{ productRangeStart() }}-{{ productRangeEnd() }}</span>
           <span class="connection-state" [class.is-offline]="connectionState() === 'offline'">
             - {{ connectionState() }}
           </span>
@@ -111,11 +111,20 @@
       </form>
       <label>
         Sort
-        <select [ngModel]="selectedSort()" (ngModelChange)="selectedSort.set($event)">
-          <option value="featured">Featured</option>
+        <select [ngModel]="selectedSort()" (ngModelChange)="setSort($event)">
+          <option value="featured">Response order</option>
           <option value="price-asc">Price low to high</option>
           <option value="price-desc">Price high to low</option>
           <option value="name">Name</option>
+        </select>
+      </label>
+      <label>
+        Per page
+        <select [ngModel]="productPageSize()" (ngModelChange)="setProductPageSize($event)">
+          <option [ngValue]="12">12</option>
+          <option [ngValue]="24">24</option>
+          <option [ngValue]="36">36</option>
+          <option [ngValue]="48">48</option>
         </select>
       </label>
     </div>
@@ -154,6 +163,21 @@
       </div>
       </article>
     </div>
+
+    <nav class="inline-actions" *ngIf="productTotalPages() > 1" aria-label="Product pagination">
+      <button class="secondary-button" type="button" [disabled]="productPage() <= 1 || searchLoading()" (click)="goToProductPage(productPage() - 1)">
+        Previous
+      </button>
+      <span>Page {{ productPage() }} / {{ productTotalPages() }}</span>
+      <button
+        class="secondary-button"
+        type="button"
+        [disabled]="productPage() >= productTotalPages() || searchLoading()"
+        (click)="goToProductPage(productPage() + 1)"
+      >
+        Next
+      </button>
+    </nav>
 
     <ng-template #emptyCatalog>
       <p class="empty-state" *ngIf="connectionState() === 'offline'">

@@ -92,6 +92,7 @@ public static class OrderEndpoints
                 order.AddOrderItem(item.ProductId, 0, item.Quantity);
 
             db.Orders.Add(order);
+            db.OrderTimelineEvents.AddRange(order.Timeline);
 
             await publishEndpoint.Publish(new OrderSubmittedEvent
             {
@@ -211,7 +212,7 @@ public static class OrderEndpoints
                 return conflict!;
 
             var reason = "Customer cancelled COD order before shipping.";
-            AddStatusTimeline(order, oldStatus, reason, "Customer");
+            AddStatusTimeline(db, order, oldStatus, reason, "Customer");
             await PublishReleaseStock(publishEndpoint, order, reason, cancellationToken);
             await PublishOrderStatusChanged(publishEndpoint, order, oldStatus, reason, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
@@ -247,7 +248,7 @@ public static class OrderEndpoints
 
         if (!TryApplyStatusChange(order, order.RequestReturn, out var oldStatus, out var conflict))
             return conflict!;
-        AddStatusTimeline(order, oldStatus, "Customer requested return.", "Customer");
+        AddStatusTimeline(db, order, oldStatus, "Customer requested return.", "Customer");
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -360,7 +361,7 @@ public static class OrderEndpoints
 
         if (!TryApplyStatusChange(order, order.ApproveReturn, out var oldStatus, out var conflict))
             return conflict!;
-        AddStatusTimeline(order, oldStatus, "Admin approved return.", "Admin");
+        AddStatusTimeline(db, order, oldStatus, "Admin approved return.", "Admin");
 
         await publishEndpoint.Publish(new ReleaseStockCommand
         {
@@ -396,7 +397,7 @@ public static class OrderEndpoints
         if (order == null) return Results.NotFound();
         if (!TryApplyStatusChange(order, order.RejectReturn, out var oldStatus, out var conflict))
             return conflict!;
-        AddStatusTimeline(order, oldStatus, "Admin rejected return.", "Admin");
+        AddStatusTimeline(db, order, oldStatus, "Admin rejected return.", "Admin");
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -417,7 +418,7 @@ public static class OrderEndpoints
         if (order == null) return Results.NotFound();
         if (!TryApplyStatusChange(order, order.Ship, out var oldStatus, out var conflict))
             return conflict!;
-        AddStatusTimeline(order, oldStatus, "Admin shipped order.", "Admin");
+        AddStatusTimeline(db, order, oldStatus, "Admin shipped order.", "Admin");
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -438,7 +439,7 @@ public static class OrderEndpoints
         if (order == null) return Results.NotFound();
         if (!TryApplyStatusChange(order, order.Deliver, out var oldStatus, out var conflict))
             return conflict!;
-        AddStatusTimeline(order, oldStatus, "Admin marked order as delivered.", "Admin");
+        AddStatusTimeline(db, order, oldStatus, "Admin marked order as delivered.", "Admin");
         await PublishOrderStatusChanged(
             publishEndpoint,
             order,
@@ -484,6 +485,7 @@ public static class OrderEndpoints
         }, ctx => ctx.SetRoutingKey(ReleaseStockRoutingKey), cancellationToken);
 
     private static void AddStatusTimeline(
+        OrderDbContext db,
         OrderEntity order,
         OrderStatus oldStatus,
         string reason,
@@ -492,11 +494,13 @@ public static class OrderEndpoints
         if (oldStatus == order.Status)
             return;
 
-        order.AddTimelineEvent(
+        var timelineEvent = order.AddTimelineEvent(
             order.Status,
             $"Order {order.Status}",
             reason,
             source);
+
+        db.OrderTimelineEvents.Add(timelineEvent);
     }
 
     private static Task<List<OrderItemResponse>> GetOrderItems(

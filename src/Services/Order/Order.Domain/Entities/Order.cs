@@ -155,17 +155,22 @@ public class Order
         or OrderStatus.Returned or OrderStatus.ReturnRejected;
     public bool CanReturn() => Status == OrderStatus.Delivered;
     public bool IsOnlinePayment() => PaymentMethod != PaymentMethodType.COD;
-        public void AddTimelineEvent(
+    public OrderTimelineEvent AddTimelineEvent(
         OrderStatus status,
         string title,
         string description,
         string source)
-        => _timeline.Add(new OrderTimelineEvent(
+    {
+        var timelineEvent = new OrderTimelineEvent(
             Id,
             status.ToString(),
             title,
             description,
-            source));
+            source);
+
+        _timeline.Add(timelineEvent);
+        return timelineEvent;
+    }
 
     // ── Computed Properties ───────────────────────────────────────────────────
     [NotMapped]

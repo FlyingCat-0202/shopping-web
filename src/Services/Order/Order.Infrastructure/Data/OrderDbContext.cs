@@ -67,6 +67,14 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<OrderEntity>()
+            .Navigation(o => o.Items)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        modelBuilder.Entity<OrderEntity>()
+            .Navigation(o => o.Timeline)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         // ── MassTransit Saga State (thay thế OrderSagaState cũ) ──────────────
         modelBuilder.Entity<OrderSagaInstance>(entity =>
         {

@@ -160,6 +160,8 @@ export class App implements OnInit {
   readonly searchTotal = signal(0);
   readonly searchPage = signal(1);
   readonly searchPageSize = signal(12);
+  readonly catalogPage = signal(1);
+  readonly catalogPageSize = signal(12);
   readonly productEditorOpen = signal(false);
   readonly productSaveBusy = signal(false);
   readonly productDeleteBusy = signal<Record<string, boolean>>({});
@@ -196,28 +198,48 @@ export class App implements OnInit {
 
   readonly searchActive = computed(() => this.searchAppliedKeyword().length > 0);
 
-  readonly visibleProducts = computed(() => {
+  readonly filteredProducts = computed(() => {
     const category = this.selectedCategory();
     const stock = this.selectedStock();
     const sort = this.selectedSort();
     const sourceProducts = this.searchActive() ? this.searchResults() : this.products();
 
-    return [...sourceProducts]
-      .filter((product) => {
-        const categoryMatch = category === 'All' || String(product.categoryId) === category;
-        const stockMatch =
-          stock === 'All' ||
-          (stock === 'InStock' && product.stockQuantity > 0) ||
-          (stock === 'OutOfStock' && product.stockQuantity <= 0);
+    const filtered = sourceProducts.filter((product) => {
+      const categoryMatch = category === 'All' || String(product.categoryId) === category;
+      const stockMatch =
+        stock === 'All' ||
+        (stock === 'InStock' && product.stockQuantity > 0) ||
+        (stock === 'OutOfStock' && product.stockQuantity <= 0);
 
-        return categoryMatch && stockMatch;
-      })
-      .sort((a, b) => {
-        if (sort === 'price-asc') return a.price - b.price;
-        if (sort === 'price-desc') return b.price - a.price;
-        return a.name.localeCompare(b.name);
-      });
+      return categoryMatch && stockMatch;
+    });
+
+    if (sort === 'price-asc') return [...filtered].sort((a, b) => a.price - b.price);
+    if (sort === 'price-desc') return [...filtered].sort((a, b) => b.price - a.price);
+    if (sort === 'name') return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+
+    return filtered;
   });
+
+  readonly visibleProducts = computed(() => {
+    const products = this.filteredProducts();
+
+    if (this.searchActive()) return products;
+
+    const start = (this.catalogPage() - 1) * this.catalogPageSize();
+    return products.slice(start, start + this.catalogPageSize());
+  });
+
+  readonly productTotal = computed(() => (this.searchActive() ? this.searchTotal() : this.filteredProducts().length));
+  readonly productPage = computed(() => (this.searchActive() ? this.searchPage() : this.catalogPage()));
+  readonly productPageSize = computed(() => (this.searchActive() ? this.searchPageSize() : this.catalogPageSize()));
+  readonly productTotalPages = computed(() => Math.max(1, Math.ceil(this.productTotal() / this.productPageSize())));
+  readonly productRangeStart = computed(() =>
+    this.productTotal() === 0 ? 0 : (this.productPage() - 1) * this.productPageSize() + 1,
+  );
+  readonly productRangeEnd = computed(() =>
+    Math.min(this.productRangeStart() + this.visibleProducts().length - 1, this.productTotal()),
+  );
 
   readonly isAdmin = computed(() => this.auth()?.role.toLowerCase() === 'admin');
   readonly currentUserId = computed(() => this.auth()?.userId.toLowerCase() ?? '');
@@ -512,6 +534,7 @@ export class App implements OnInit {
 
   async searchProducts(page = 1, showEmptyToast = true): Promise<void> {
     const keyword = this.searchKeyword().trim();
+    const nextPage = Math.max(1, page);
 
     if (!keyword) {
       this.clearSearch();
@@ -524,7 +547,7 @@ export class App implements OnInit {
     try {
       const params = new URLSearchParams({
         Keyword: keyword,
-        Page: String(page),
+        Page: String(nextPage),
         PageSize: String(this.searchPageSize()),
       });
       const payload = await this.api.request<any>('product', `/api/products/search?${params.toString()}`);
@@ -534,17 +557,19 @@ export class App implements OnInit {
       this.searchAppliedKeyword.set(keyword);
       this.searchResults.set(products);
       this.searchTotal.set(Number(payload.totalItems ?? payload.TotalItems ?? products.length));
-      this.searchPage.set(Number(payload.currentPage ?? payload.CurrentPage ?? page));
+      this.searchPage.set(Number(payload.currentPage ?? payload.CurrentPage ?? nextPage));
 
       if (products.length === 0 && showEmptyToast) {
         this.showToast('No products found in search.');
       }
     } catch (error) {
-      const fallbackProducts = this.localSearch(keyword);
+      const fallbackMatches = this.localSearch(keyword);
+      const start = (nextPage - 1) * this.searchPageSize();
+      const fallbackProducts = fallbackMatches.slice(start, start + this.searchPageSize());
       this.searchAppliedKeyword.set(keyword);
       this.searchResults.set(fallbackProducts);
-      this.searchTotal.set(fallbackProducts.length);
-      this.searchPage.set(1);
+      this.searchTotal.set(fallbackMatches.length);
+      this.searchPage.set(nextPage);
       if (fallbackProducts.length === 0 && showEmptyToast) {
         this.showToast(`Search service unavailable. No local matches found. ${this.api.messageFromError(error)}`);
       }
@@ -559,6 +584,31 @@ export class App implements OnInit {
     this.searchResults.set([]);
     this.searchTotal.set(0);
     this.searchPage.set(1);
+  }
+
+  async goToProductPage(page: number): Promise<void> {
+    const nextPage = Math.min(Math.max(1, page), this.productTotalPages());
+    if (nextPage === this.productPage()) return;
+
+    if (this.searchActive()) {
+      await this.searchProducts(nextPage, false);
+      return;
+    }
+
+    this.catalogPage.set(nextPage);
+  }
+
+  setProductPageSize(value: number | string): void {
+    const pageSize = Math.max(1, Number(value) || 12);
+
+    if (this.searchActive()) {
+      this.searchPageSize.set(pageSize);
+      void this.searchProducts(1, false);
+      return;
+    }
+
+    this.catalogPageSize.set(pageSize);
+    this.catalogPage.set(1);
   }
 
   async addToCart(product: Product): Promise<void> {
@@ -980,10 +1030,17 @@ export class App implements OnInit {
 
   setCategory(value: string): void {
     this.selectedCategory.set(value);
+    this.resetProductPage();
   }
 
   setStock(value: string): void {
     this.selectedStock.set(value);
+    this.resetProductPage();
+  }
+
+  setSort(value: string): void {
+    this.selectedSort.set(value);
+    this.resetProductPage();
   }
 
   openAccount(): void {
@@ -1372,6 +1429,10 @@ private normalizeOrderDetail(order: any): OrderDetail {
 
   private orderActionKey(order: OrderSummary, action: string): string {
     return `${order.id}:${action}`;
+  }
+
+  private resetProductPage(): void {
+    if (!this.searchActive()) this.catalogPage.set(1);
   }
 
   private showToast(message: string): void {
