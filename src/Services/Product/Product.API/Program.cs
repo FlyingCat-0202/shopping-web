@@ -18,38 +18,21 @@ using ServiceDefault;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── DbContext ────────────────────────────────────────────────────────────────
-builder.Services.AddDbContext<ProductDbContext>(options =>
+builder.AddNpgsqlDbContext<ProductDbContext>("product-db", configureDbContextOptions: options =>
 {
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("product-db")
-            ?? builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Missing connection string. Set ConnectionStrings__product-db or run the service through Aspire AppHost."),
-        npgsql =>
-        {
-            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Product", "product");
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorCodesToAdd: null);
-        });
+    options.UseNpgsql(npgsql =>
+    {
+        npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Product", "product");
+    });
 });
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.AddApiServiceDefaults();
 builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
 builder.Services.AddScoped<IStockReservationService, StockReservationService>();
-
-// >>> THÊM ĐOẠN CODE NÀY VÀO ĐÂY <<<
-var elasticUri = builder.Configuration.GetConnectionString("elasticsearch")
-                 ?? "http://localhost:9200"; // Đổi port tùy theo Docker của bạn
-
-var settings = new ElasticsearchClientSettings(new Uri(elasticUri))
-    // .Authentication(new BasicAuthentication("elastic", "changeme")) // Bỏ comment nếu ES của bạn có cài password
-    .DefaultIndex("products"); // (Tùy chọn) Đặt index mặc định để mốt khỏi phải gõ lại chuỗi "products"
-
-builder.Services.AddSingleton(new ElasticsearchClient(settings));
-// >>> KẾT THÚC ĐOẠN THÊM MỚI <<<
+builder.AddElasticsearchClient(
+    "elasticsearch",
+    configureClientSettings: settings => settings.DefaultIndex("products"));
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -135,10 +118,8 @@ builder.Services.AddMassTransit(x =>
 });
 
 // ── Add Redis ────────────────────────────────────────────────────────────────
-var redisConnectionString = builder.Configuration.GetConnectionString("redis") ??
-                            builder.Configuration.GetConnectionString("DefaultConnection") ??
-                            throw new InvalidOperationException("Missing connection string for redis");
-builder.Services.AddRedisIdempotency(redisConnectionString);
+builder.AddRedisClient("redis");
+builder.Services.AddRedisIdempotency();
 
 builder.Services.AddHttpClient<IAiEmbeddingService, LocalEmbeddingService>();
 

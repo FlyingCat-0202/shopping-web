@@ -15,17 +15,12 @@ using ServiceDefault;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── DbContext (PostgreSQL) ──────────────────────────────────────────────────
-builder.Services.AddDbContext<IdentityAppDbContext>(options =>
+builder.AddNpgsqlDbContext<IdentityAppDbContext>("identity-db", configureDbContextOptions: options =>
 {
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("identity-db")
-            ?? builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Missing connection string 'identity-db'."),
-        npgsql =>
-        {
-            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Identity", "identity");
-            npgsql.EnableRetryOnFailure(5);
-        });
+    options.UseNpgsql(npgsql =>
+    {
+        npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Identity", "identity");
+    });
 });
 
 // ── ASP.NET Core Identity ───────────────────────────────────────────────────

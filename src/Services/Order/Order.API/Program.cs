@@ -15,20 +15,12 @@ using ServiceDefault;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── DbContext ────────────────────────────────────────────────────────────────
-builder.Services.AddDbContext<OrderDbContext>(options =>
+builder.AddNpgsqlDbContext<OrderDbContext>("order-db", configureDbContextOptions: options =>
 {
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("order-db")
-            ?? builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=order-db;Username=postgres;Password=postgres",
-        npgsql =>
-        {
-            npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Order", "order");
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorCodesToAdd: null);
-        });
+    options.UseNpgsql(npgsql =>
+    {
+        npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Order", "order");
+    });
 });
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
@@ -85,10 +77,8 @@ builder.Services.AddMassTransit(x =>
 });
 
 // ── Add Redis ────────────────────────────────────────────────────────────────
-var redisConnectionString = builder.Configuration.GetConnectionString("redis") ??
-                            builder.Configuration.GetConnectionString("DefaultConnection") ??
-                            throw new InvalidOperationException("Missing connection string for redis");
-builder.Services.AddRedisIdempotency(redisConnectionString);
+builder.AddRedisClient("redis");
+builder.Services.AddRedisIdempotency();
 
 var app = builder.Build();
 
