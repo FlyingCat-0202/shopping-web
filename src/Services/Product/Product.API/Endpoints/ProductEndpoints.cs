@@ -265,9 +265,8 @@ public static class ProductEndpoints
             var keyword = request.Keyword?.Trim() ?? string.Empty;
             var from = (page - 1) * pageSize;
 
-            // 1. Giả lập danh sách danh mục (Nên lấy từ Cache/DB)
             var existingCategories = await db.Categories
-                                             .Select(p => p.Name)
+                                             .Select(p => new { p.Name, p.Description })
                                              .ToListAsync(cancellationToken);
 
             // 2. Kiểm tra xem người dùng có gõ tên danh mục nào không
@@ -275,15 +274,51 @@ public static class ProductEndpoints
 
             if (request.Keyword is not null)
             {
+                // 1. Chuẩn hóa keyword và tách thành danh sách các từ vựng (chỉ làm 1 lần ngoài vòng lặp)
                 string normalizedKeyword = EndpointHelpers.NormalizeVietnamese(request.Keyword);
+                char[] separators = new[] { ' ', ',', '.', ';', '?', '!', '-', '_' };
 
-                foreach (var cat in existingCategories)
-                {
-                    if (normalizedKeyword.Contains(EndpointHelpers.NormalizeVietnamese(cat)))
+                string[] keywordWords = normalizedKeyword.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+
+                // 2. Dùng LINQ để tính điểm
+                var bestCategoryMatch = existingCategories
+                    .Select(cat =>
                     {
-                        targetCategory = cat;
-                        break;
-                    }
+                        string normalizedName = EndpointHelpers.NormalizeVietnamese(cat.Name ?? "");
+                        string normalizedDesc = EndpointHelpers.NormalizeVietnamese(cat.Description ?? "");
+
+                        // --- TIÊU CHÍ 1: Trùng khớp nguyên cụm hoàn toàn (Ưu tiên tuyệt đối) ---
+                        if (normalizedName == normalizedKeyword)
+                        {
+                            return new { Category = cat, Score = 100 };
+                        }
+
+                        // --- TIÊU CHÍ 2: Đếm từ khớp chính xác bằng HashSet ---
+
+                        // Đưa Name thành HashSet (Dùng StringComparer để không phân biệt hoa thường)
+                        HashSet<string> nameWords = normalizedName
+                            .Split(separators, StringSplitOptions.RemoveEmptyEntries)
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                        // Đưa Description thành HashSet
+                        HashSet<string> descWords = normalizedDesc
+                            .Split(separators, StringSplitOptions.RemoveEmptyEntries)
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                        // Đếm số từ của Keyword xuất hiện trong Name và Description
+                        int matchedWordsInName = keywordWords.Count(w => nameWords.Contains(w));
+                        int matchedWordsInDesc = keywordWords.Count(w => descWords.Contains(w));
+
+                        return new { Category = cat, Score = Math.Max(matchedWordsInName, matchedWordsInDesc)};
+                    })
+                    .Where(x => x.Score > 0)          // Chỉ lấy những category có điểm
+                    .OrderByDescending(x => x.Score)  // Lấy điểm cao nhất đưa lên đầu
+                    .FirstOrDefault();
+
+                // 3. Gán kết quả
+                if (bestCategoryMatch != null)
+                {
+                    targetCategory = bestCategoryMatch.Category.Name;
                 }
             }
 
@@ -300,7 +335,7 @@ public static class ProductEndpoints
 
                 // 2. Thực hiện Hybrid Search
                 var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s => s
-                    .Index("products")
+                    .Indices("products")
                     .From(from)
                     .Size(request.PageSize)
                     .Query(q => q
