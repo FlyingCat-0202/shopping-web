@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using Identity.Domain.Models;
-using Identity.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,7 +20,6 @@ public static class CustomerGenerator
     public static async Task GenerateCustomersAsync(
         UserManager<Customer> userManager,
         RoleManager<IdentityRole<Guid>> roleManager,
-        IdentityAppDbContext dbContext,
         int totalToSeed)
     {
         Console.WriteLine($"Starting seed of {totalToSeed} customers...");
@@ -55,13 +49,11 @@ public static class CustomerGenerator
         {
             attempts++;
 
-            // Create a logical name
             string lastName = LastNames[random.Next(LastNames.Length)];
             string middleName = MiddleNames[random.Next(MiddleNames.Length)];
             string firstName = FirstNames[random.Next(FirstNames.Length)];
             string fullName = $"{lastName} {middleName} {firstName}";
 
-            // Create a matching email
             string rawEmailPrefix = RemoveDiacritics($"{firstName.ToLower()}{middleName.ToLower()}{lastName.ToLower()}{random.Next(100, 9999)}");
             string domain = EmailDomains[random.Next(EmailDomains.Length)];
             string email = $"{rawEmailPrefix}@{domain}";
@@ -71,7 +63,6 @@ public static class CustomerGenerator
                 continue;
             }
 
-            // Create a phone number in Vietnamese format
             string[] prefixes = ["090", "091", "098", "097", "035", "038", "086", "077", "093", "094"];
             string prefix = prefixes[random.Next(prefixes.Length)];
             string phoneSuffix = random.Next(1000000, 9999999).ToString();
@@ -82,7 +73,6 @@ public static class CustomerGenerator
                 continue;
             }
 
-            // Create a logical address
             int num = random.Next(1, 450);
             string street = Streets[random.Next(Streets.Length)];
             string district = Districts[random.Next(Districts.Length)];

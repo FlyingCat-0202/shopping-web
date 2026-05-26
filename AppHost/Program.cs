@@ -22,11 +22,9 @@ var elasticsearch = builder.AddElasticsearch("elasticsearch")
 
 var infinityApi = builder.AddContainer("infinity-ai", "michaelf34/infinity")
     .WithImageTag("latest")
-    // Map port nội bộ 7997 ra ngoài (bạn có thể đổi port ngoài nếu trùng)
     .WithHttpEndpoint(port: 7997, targetPort: 7997, name: "api")
-    .WithEnvironment("MODEL_ID", "BAAI/bge-m3") // Chỉ định tải model BGE-M3
+    .WithEnvironment("MODEL_ID", "BAAI/bge-m3") 
     .WithEnvironment("PORT", "7997");
-     //Tùy chọn: Nếu máy bạn CÓ CARD ĐỒ HỌA NVIDIA (GPU), hãy mở comment dòng dưới để chạy nhanh gấp 10 lần
      //.WithEnvironment("DEVICE", "cuda");
 
 // ── Databases (mỗi service dùng DB riêng) ────────────────────────────────────
@@ -85,7 +83,7 @@ var notificationApi = builder.AddProject<Notification_API>("notification-api")
     .WaitFor(rabbitmq)
     .WaitFor(redis);
 
-var gateway = builder.AddProject<Projects.ApiGateway>("api-gateway")
+var gateway = builder.AddProject<ApiGateway>("api-gateway")
     .WithHttpEndpoint(port: 5000, targetPort: 5000, name: "http", isProxied: false)
     .WithReference(identityApi)
     .WithReference(productApi)

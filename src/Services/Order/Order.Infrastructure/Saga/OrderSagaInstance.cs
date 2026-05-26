@@ -18,6 +18,4 @@ public class OrderSagaInstance : SagaStateMachineInstance
     public DateTime? StockReservedAt { get; set; }
     public DateTime? PaymentCreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
-
-    public int Version { get; set; }
 }

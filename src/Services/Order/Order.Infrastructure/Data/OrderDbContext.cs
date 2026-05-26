@@ -84,7 +84,7 @@ public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContex
             entity.Property(s => s.PaymentMethod).HasMaxLength(50);
             entity.Property(s => s.FailureReason).HasMaxLength(500);
             entity.Property(s => s.TotalAmount).HasColumnType("decimal(18,2)");
-            entity.Property(s => s.Version).IsConcurrencyToken();
+            entity.Property<uint>("xmin").IsRowVersion();
             entity.HasIndex(s => new { s.CurrentState, s.UpdatedAt })
                   .HasDatabaseName("IX_OrderSagaInstances_CurrentState_UpdatedAt");
         });

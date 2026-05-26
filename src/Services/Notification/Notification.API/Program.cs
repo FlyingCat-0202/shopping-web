@@ -2,7 +2,6 @@ using EventBus.Extensions;
 using EventBus.Infrastructure;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi;
 using Notification.API.Endpoints;
 using Notification.API.IntegrationEvents.Consumers;
 using Notification.Infrastructure.Data;
@@ -21,24 +20,6 @@ builder.AddNpgsqlDbContext<NotificationDbContext>("notification-db", configureDb
 
 // ── Infrastructure ───────────────────────────────────────────────────────────
 builder.AddApiServiceDefaults();
-
-// ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Notification API", Version = "v1" });
-    var bearerSchemeId = "Bearer";
-    c.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
-    });
-    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference(bearerSchemeId, doc)] = []
-    });
-});
 
 // ── JWT Auth ─────────────────────────────────────────────────────────────────
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -87,12 +68,6 @@ await app.MigrateDatabaseAsync<NotificationDbContext>();
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Notification API v1"));
-}
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -3,7 +3,6 @@ using EventBus.Infrastructure;
 using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi;
 using Order.API.Endpoints;
 using Order.API.Saga;
 using Order.API.Validators;
@@ -27,24 +26,6 @@ builder.AddNpgsqlDbContext<OrderDbContext>("order-db", configureDbContextOptions
 builder.AddApiServiceDefaults();
 builder.Services.AddHostedService<OrderSagaTimeoutService>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderValidator>();
-
-// ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Order API", Version = "v1" });
-    var bearerSchemeId = "Bearer";
-    c.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
-    });
-    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference(bearerSchemeId, doc)] = []
-    });
-});
 
 // ── JWT Auth ──────────────────────────────────────────────────────────────────
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -92,12 +73,6 @@ await app.MigrateDatabaseAsync<OrderDbContext>();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Order API v1"));
-}
 
 app.UseAuthentication();
 app.UseAuthorization();

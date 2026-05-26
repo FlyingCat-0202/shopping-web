@@ -9,7 +9,6 @@ using FluentValidation;
 using MassTransit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi;
 using ServiceDefault;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,26 +36,6 @@ builder.Services.AddIdentity<Customer, IdentityRole<Guid>>(options =>
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.AddApiServiceDefaults();
 builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
-
-// ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Identity API", Version = "v1" });
-
-    var bearerSchemeId = "Bearer";
-    c.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        Description = "Nhập JWT token để xác thực."
-    });
-    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference(bearerSchemeId, doc)] = []
-    });
-});
 
 // ── JWT Configuration ────────────────────────────────────────────────────────
 // Identity API chủ yếu phát hành token, nhưng vẫn cần auth để bảo vệ profile/user endpoints.
@@ -91,12 +70,6 @@ await IdentitySeedData.SeedAdminAsync(app);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Identity API v1"));
-}
 
 app.UseAuthentication();
 app.UseAuthorization();

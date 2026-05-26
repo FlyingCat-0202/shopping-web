@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using EventBus.Contracts;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -97,7 +93,6 @@ public static class ProductGenerator
     {
         Console.WriteLine($"Starting seed of {totalToSeed} products...");
 
-        // Ensure categories exist in DB
         var categoryMap = await SeedCategoriesAsync(dbContext);
 
         var existingNames = await dbContext.Products
@@ -115,20 +110,16 @@ public static class ProductGenerator
         while (generatedCount < totalToSeed && attempts < maxAttempts)
         {
             attempts++;
-            // Pick a random category
             var categoryName = Subcategories.Keys.ElementAt(random.Next(Subcategories.Count));
             var categoryId = categoryMap[categoryName];
 
-            // Pick subcategory, adjective, and color
             var subcatOptions = Subcategories[categoryName];
             var subcat = subcatOptions[random.Next(subcatOptions.Length)];
             var adj = Adjectives[random.Next(Adjectives.Length)];
             var color = Colors[random.Next(Colors.Length)];
 
-            // Create a meaningful name
             string name = $"{subcat} {adj} màu {color}";
 
-            // Guarantee uniqueness
             if (existingNamesSet.Contains(name))
             {
                 continue;
@@ -136,15 +127,12 @@ public static class ProductGenerator
 
             existingNamesSet.Add(name);
 
-            // Compute logical price
             decimal price = GetLogicalPrice(subcat, random);
             int stock = random.Next(10, 150);
 
-            // Fetch logical Unsplash image
             var images = UnsplashImages[categoryName];
             var imageUrl = images[random.Next(images.Length)];
 
-            // Generate logical description
             string description = GenerateDescription(name, subcat, adj, color);
 
             var product = new ProductEntity
@@ -190,7 +178,6 @@ public static class ProductGenerator
             await publishEndpoint.Publish(eventMsg);
         }
 
-        await dbContext.SaveChangesAsync();
         Console.WriteLine($"Successfully seeded {productsToAdd.Count} products and queued integration events.");
     }
 

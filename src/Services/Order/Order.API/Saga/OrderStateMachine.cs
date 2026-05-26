@@ -8,15 +8,6 @@ using Order.Infrastructure.Saga;
 
 namespace Order.API.Saga;
 
-/// <summary>
-/// MassTransit StateMachine Saga — gom TOÀN BỘ orchestration logic vào 1 nơi.
-/// Thay thế consumer thủ công; timeout service chỉ còn bắn timeout event vào state machine.
-/// 
-/// Flow:
-///   Submitted → StockReserving → [COD] → Completed
-///                                [Online] → PaymentCreating → PaymentPending → Completed
-///                                [Fail/Cancel/Timeout] → Cancelling → Completed
-/// </summary>
 public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
 {
     // ── States ───────────────────────────────────────────────────────────────
@@ -25,7 +16,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
     public State PaymentCreating { get; private set; } = null!;
     public State PaymentPending { get; private set; } = null!;
     public State Cancelling { get; private set; } = null!;
-    // Final states use SetCompletedWhenFinalized()
 
     // ── Events ───────────────────────────────────────────────────────────────
     public Event<OrderSubmittedEvent> OrderSubmitted { get; private set; } = null!;
@@ -43,10 +33,8 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
 
     public OrderStateMachine()
     {
-        // Saga instance state field
         InstanceState(x => x.CurrentState);
 
-        // ── Event Correlation ────────────────────────────────────────────────
         Event(() => OrderSubmitted, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => StockReserved, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => StockReservationFailed, x => x.CorrelateById(ctx => ctx.Message.OrderId));
@@ -59,18 +47,16 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
         Event(() => StockTimedOut, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => PaymentTimedOut, x => x.CorrelateById(ctx => ctx.Message.OrderId));
 
-        // ══════════════════════════════════════════════════════════════════════
-        // ── FLOW DEFINITIONS ─────────────────────────────────────────────────
-        // ══════════════════════════════════════════════════════════════════════
-
-        // ── 1. Initially: OrderSubmittedEvent ────────────────────────────────
         Initially(
             When(OrderSubmitted)
                 .Then(ctx =>
                 {
                     ctx.Saga.CustomerId = ctx.Message.CustomerId;
                     ctx.Saga.PaymentMethod = ctx.Message.PaymentMethod;
-                    ctx.Saga.IsCOD = !IsOnlinePayment(ctx.Message.PaymentMethod);
+                    ctx.Saga.IsCOD = string.Equals(
+                        ctx.Message.PaymentMethod,
+                        nameof(PaymentMethodType.COD),
+                        StringComparison.OrdinalIgnoreCase);
                     ctx.Saga.CreatedAt = DateTime.UtcNow;
                     ctx.Saga.UpdatedAt = DateTime.UtcNow;
                 })
@@ -84,11 +70,9 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .TransitionTo(StockReserving)
         );
 
-        // ── 2. StockReserving: chờ stock reservation ─────────────────────────
         During(StockReserving,
             When(OrderSubmitted).Then(_ => { }),
 
-            // ✅ Stock reserved thành công
             When(StockReserved)
                 .Then(ctx =>
                 {
@@ -97,7 +81,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 })
                 .Activity(x => x.OfType<StockReservedActivity>())
                 .If(ctx => ctx.Saga.IsCOD,
-                    // COD → complete ngay
                     cod => cod
                         .Then(ctx =>
                         {
@@ -113,7 +96,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                         }))
                         .Finalize())
                 .If(ctx => !ctx.Saga.IsCOD,
-                    // Online payment → chuyển sang payment
                     online => online
                         .PublishAsync(ctx => ctx.Init<CreatePaymentCommand>(new
                         {
@@ -125,7 +107,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                         }))
                         .TransitionTo(PaymentCreating)),
 
-            // ❌ Stock reservation failed
             When(StockReservationFailed)
                 .Then(ctx =>
                 {
@@ -135,7 +116,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .Activity(x => x.OfType<StockFailedActivity>())
                 .Finalize(),
 
-            // ⏰ Stock timeout (15 phút)
             When(StockTimedOut)
                 .Then(ctx =>
                 {
@@ -145,7 +125,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .Activity(x => x.OfType<TimeoutCancelActivity>())
                 .TransitionTo(Cancelling),
 
-            // 🚫 Customer cancel trong khi chờ stock
             When(CancelRequested)
                 .Then(ctx =>
                 {
@@ -156,7 +135,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .TransitionTo(Cancelling)
         );
 
-        // ── 3. PaymentCreating: chờ payment service tạo payment ──────────────
         During(PaymentCreating,
             When(OrderSubmitted).Then(_ => { }),
             When(StockReserved).Then(_ => { }),
@@ -206,13 +184,11 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .TransitionTo(Cancelling)
         );
 
-        // ── 4. PaymentPending: chờ user thanh toán ───────────────────────────
         During(PaymentPending,
             When(OrderSubmitted).Then(_ => { }),
             When(StockReserved).Then(_ => { }),
             When(PaymentCreated).Then(_ => { }),
 
-            // ✅ Payment thành công
             When(PaymentSucceeded)
                 .Then(ctx =>
                 {
@@ -222,7 +198,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .Activity(x => x.OfType<PaymentSucceededActivity>())
                 .Finalize(),
 
-            // ❌ Payment failed
             When(PaymentFailed)
                 .Then(ctx =>
                 {
@@ -232,7 +207,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .Activity(x => x.OfType<PaymentFailedCancelActivity>())
                 .TransitionTo(Cancelling),
 
-            // ⏰ Fallback timeout. Payment service remains the owner of normal payment expiration.
             When(PaymentTimedOut)
                 .Then(ctx =>
                 {
@@ -242,7 +216,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .Activity(x => x.OfType<PaymentTimeoutCancelActivity>())
                 .TransitionTo(Cancelling),
 
-            // 🚫 Customer cancel khi đang chờ payment
             When(CancelRequested)
                 .Then(ctx =>
                 {
@@ -253,7 +226,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .TransitionTo(Cancelling)
         );
 
-        // ── 5. Cancelling: đang chờ stock release (compensation) ─────────────
         During(Cancelling,
             When(OrderSubmitted).Then(_ => { }),
 
@@ -268,7 +240,6 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 })
                 .Finalize(),
 
-            // Ignore duplicate events
             When(CancelRequested).Then(_ => { }),
             When(StockTimedOut).Then(_ => { }),
             When(PaymentTimedOut).Then(_ => { }),
@@ -287,23 +258,11 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
                 .Finalize()
         );
 
-        // ── Finalized = xóa saga instance khỏi DB ───────────────────────────
         SetCompletedWhenFinalized();
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private static bool IsOnlinePayment(string paymentMethod)
-        => !string.Equals(paymentMethod, nameof(PaymentMethodType.COD), StringComparison.OrdinalIgnoreCase);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── ACTIVITIES (cập nhật Order entity từ trong saga) ─────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Khi stock reserved → cập nhật Order entity: MarkStockReserved + publish OrderStatusChanged
-/// </summary>
 public class StockReservedActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, StockReservedEvent>
 {
@@ -342,9 +301,6 @@ public class StockReservedActivity(OrderDbContext db) :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// Khi stock reservation failed → cancel Order entity
-/// </summary>
 public class StockFailedActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, StockReservationFailedEvent>
 {
@@ -375,9 +331,6 @@ public class StockFailedActivity(OrderDbContext db) :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// Khi payment thành công → confirm payment trên Order entity + publish RemoveCartItems
-/// </summary>
 public class PaymentSucceededActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, PaymentSucceededEvent>
 {
@@ -395,7 +348,6 @@ public class PaymentSucceededActivity(OrderDbContext db) :
                 "Payment succeeded.", "Saga");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, "Payment succeeded.");
 
-            // Remove cart items after successful payment
             await context.Publish(new RemoveCartItemsCommand
             {
                 CorrelationId = order.Id,
@@ -418,9 +370,6 @@ public class PaymentSucceededActivity(OrderDbContext db) :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// Khi payment failed → cancel Order + publish ReleaseStock
-/// </summary>
 public class PaymentFailedCancelActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, PaymentFailedEvent>
 {
@@ -438,7 +387,6 @@ public class PaymentFailedCancelActivity(OrderDbContext db) :
             SagaActivityHelper.AddTimelineEvent(db, order, order.Status, $"Order {order.Status}", reason, "Saga");
             await SagaActivityHelper.PublishStatusChanged(context, order, oldStatus, reason);
 
-            // Compensation: release stock
             await context.Publish(new ReleaseStockCommand
             {
                 CorrelationId = order.Id,
@@ -466,9 +414,6 @@ public class PaymentFailedCancelActivity(OrderDbContext db) :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// Stock timeout → cancel Order entity
-/// </summary>
 public class TimeoutCancelActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, StockTimeoutExpired>
 {
@@ -498,9 +443,6 @@ public class TimeoutCancelActivity(OrderDbContext db) :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// StockReservedEvent về sau khi order đã bị cancel/timeout thì phải hoàn kho.
-/// </summary>
 public class LateStockReservedActivity :
     IStateMachineActivity<OrderSagaInstance, StockReservedEvent>
 {
@@ -531,9 +473,6 @@ public class LateStockReservedActivity :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// Payment timeout → cancel Order + cancel/refund payment, then release stock after payment answers.
-/// </summary>
 public class PaymentTimeoutCancelActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, PaymentTimeoutExpired>
 {
@@ -575,9 +514,6 @@ public class PaymentTimeoutCancelActivity(OrderDbContext db) :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// Customer cancel khi chưa có stock (đang StockReserving) → chỉ cancel Order
-/// </summary>
 public class CancelOrderActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, CancelOrderCommand>
 {
@@ -607,10 +543,6 @@ public class CancelOrderActivity(OrderDbContext db) :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// Customer cancel khi đã có stock (PaymentCreating/PaymentPending) → cancel + cancel/refund payment.
-/// Stock chỉ được release khi payment service xác nhận failed/refunded.
-/// </summary>
 public class CancelWithCompensationActivity(OrderDbContext db) :
     IStateMachineActivity<OrderSagaInstance, CancelOrderCommand>
 {
@@ -655,10 +587,6 @@ public class CancelWithCompensationActivity(OrderDbContext db) :
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
 
-/// <summary>
-/// PaymentSucceededEvent có thể về trễ sau khi order đã vào Cancelling.
-/// Khi chưa có refund flow provider thật, CancelPaymentCommand đóng vai trò cancel-or-refund idempotent.
-/// </summary>
 public class LatePaymentSucceededActivity :
     IStateMachineActivity<OrderSagaInstance, PaymentSucceededEvent>
 {
@@ -753,8 +681,6 @@ public class ReleaseStockAfterPaymentRefundedActivity(OrderDbContext db) :
     public void Probe(ProbeContext context) => context.CreateScope("release-stock-after-payment-refunded-activity");
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 }
-
-// ── Helper: Publish OrderStatusChanged ───────────────────────────────────────
 
 internal static class SagaActivityHelper
 {

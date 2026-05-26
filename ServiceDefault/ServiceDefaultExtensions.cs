@@ -5,10 +5,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.OpenApi;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using Scalar.AspNetCore;
 
 namespace ServiceDefault;
 
@@ -24,6 +26,7 @@ public static class ServiceDefaultExtensions
         builder.Services.AddHealthChecks();
         builder.Services.AddHttpLogging();
         builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
+        builder.Services.AddScalarOpenApi(builder.Environment.ApplicationName);
 
         return builder;
     }
@@ -113,9 +116,59 @@ public static class ServiceDefaultExtensions
         app.UseExceptionHandler();
         app.UseHttpLogging();
         app.UseFrontendCors();
+        app.MapScalarOpenApi();
 
         return app;
     }
+
+    private static IServiceCollection AddScalarOpenApi(
+        this IServiceCollection services,
+        string applicationName)
+    {
+        var title = ToApiTitle(applicationName);
+
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen(c =>
+        {
+            c.SwaggerDoc("v1", new OpenApiInfo { Title = title, Version = "v1" });
+
+            const string bearerSchemeId = "Bearer";
+            c.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT"
+            });
+            c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference(bearerSchemeId, doc)] = []
+            });
+        });
+
+        return services;
+    }
+
+    private static WebApplication MapScalarOpenApi(this WebApplication app)
+    {
+        if (!app.Environment.IsDevelopment())
+            return app;
+
+        var title = ToApiTitle(app.Environment.ApplicationName);
+
+        app.MapSwagger("/openapi/{documentName}.json");
+        app.MapScalarApiReference(options =>
+        {
+            options.WithTitle(title)
+                .WithOpenApiRoutePattern("/openapi/{documentName}.json");
+        });
+
+        return app;
+    }
+
+    private static string ToApiTitle(string applicationName)
+        => string.IsNullOrWhiteSpace(applicationName)
+            ? "API"
+            : applicationName.Replace(".", " ").Replace("_", " ");
 
     public static IServiceCollection AddFrontendCors(
         this IServiceCollection services,

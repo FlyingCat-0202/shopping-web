@@ -15,7 +15,6 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
         var message = context.Message;
         try
         {
-            //await Task.Delay(4200);
             float[] queryVector = await aiEmbeddingService.GetVectorAsync(message.Name);
             var embeddingVector = ElasticProductIndex.NormalizeVector(queryVector, logger, $"product {message.Id}");
             var doc = new ProductEsDocument(
@@ -33,7 +32,7 @@ public class SyncProductToElasticConsumer(ElasticsearchClient e, ILogger<SyncPro
                 .Index(ElasticProductIndex.Name)
                 .Id(doc.Id));
 
-            logger.LogInformation("Đã đẩy sản phẩm {Name} vào ES thành công!", doc.Name); // THÊM DÒNG NÀY
+            logger.LogInformation("Đã đẩy sản phẩm {Name} vào ES thành công!", doc.Name);
 
             if (!response.IsValidResponse)
                 throw new Exception($"Insert failed: {response.DebugInformation}");

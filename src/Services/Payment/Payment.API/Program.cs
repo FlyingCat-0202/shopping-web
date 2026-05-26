@@ -2,7 +2,6 @@ using EventBus.Extensions;
 using EventBus.Infrastructure;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi;
 using Payment.API.BackgroundJobs;
 using Payment.API.Endpoints;
 using Payment.API.IntegrationEvents.Consumers;
@@ -27,24 +26,6 @@ builder.Services.AddHostedService<PaymentTimeoutService>();
 builder.Services.AddSingleton<IPaymentProvider, MeiMeiPaymentProvider>();
 builder.Services.AddSingleton<IPaymentProvider, MeilyMeilyPaymentProvider>();
 builder.Services.AddSingleton<PaymentProviderCatalog>();
-
-// ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Payment API", Version = "v1" });
-    var bearerSchemeId = "Bearer";
-    c.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
-    });
-    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference(bearerSchemeId, doc)] = []
-    });
-});
 
 // ── JWT Auth ──────────────────────────────────────────────────────────────────
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -93,12 +74,6 @@ await app.MigrateDatabaseAsync<PaymentDbContext>();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Payment API v1"));
-}
 
 app.UseAuthentication();
 app.UseAuthorization();

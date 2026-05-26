@@ -4,7 +4,6 @@ using EventBus.Infrastructure;
 using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi;
 using Product.API.Endpoints;
 using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
@@ -33,24 +32,6 @@ builder.Services.AddScoped<IStockReservationService, StockReservationService>();
 builder.AddElasticsearchClient(
     "elasticsearch",
     configureClientSettings: settings => settings.DefaultIndex("products"));
-
-// ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Product API", Version = "v1" });
-    var bearerSchemeId = "Bearer";
-    c.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
-    });
-    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference(bearerSchemeId, doc)] = []
-    });
-});
 
 // ── JWT Auth ──────────────────────────────────────────────────────────────────
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -129,12 +110,6 @@ await app.MigrateDatabaseAsync<ProductDbContext>();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.UseApiServiceDefaults();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Product API v1"));
-}
 
 app.UseAuthentication();
 app.UseAuthorization();

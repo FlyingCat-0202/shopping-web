@@ -40,7 +40,6 @@ const defaultApi: ApiConfig = {
 
 const storageKeys = {
   auth: 'northern-mountains.angular.auth',
-  api: 'northern-mountains.angular.api',
 };
 
 @Injectable({ providedIn: 'root' })
@@ -190,10 +189,6 @@ export class ApiService {
     } catch {
       return null;
     }
-  }
-
-  private trimUrl(value: string): string {
-    return value.trim().replace(/\/+$/, '');
   }
 
   private requestId(): string {

@@ -16,10 +16,6 @@ namespace Product.API.Endpoints;
 
 public static class ProductEndpoints
 {
-    //private const string ProductCreateRoutingKey = "product-create";
-    //private const string ProductDeleteRoutingKey = "product-delete";
-    //private const string ProductUpdateRoutingKey = "product-update";
-
     public static void MapProductEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/products")
@@ -323,7 +319,6 @@ public static class ProductEndpoints
 
             try
             {
-                // SỬA LỖI CS1955: Nếu keyword rỗng, gọi thẳng hàm tìm kiếm Database thay vì MatchAllQuery()
                 if (string.IsNullOrWhiteSpace(request.Keyword))
                 {
                     return await SearchProductsFromDatabase(db, keyword, page, pageSize, cancellationToken);

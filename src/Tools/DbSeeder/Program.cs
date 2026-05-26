@@ -1,8 +1,4 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
@@ -21,7 +17,6 @@ class Program
         Console.WriteLine("       Shopping Web Database Seeder   ");
         Console.WriteLine("======================================");
 
-        // Command parsing
         if (args.Length < 3 || !args[0].Equals("seed", StringComparison.OrdinalIgnoreCase))
         {
             PrintUsage();
@@ -56,7 +51,6 @@ class Program
         var rabbitMqConn = Environment.GetEnvironmentVariable("ConnectionStrings__rabbitmq")
                            ?? $"amqp://{rabbitMqUsername}:{rabbitMqPassword}@localhost:5672/";
 
-        // Setup DI container
         var services = new ServiceCollection();
 
         services.AddLogging(configure => configure.AddConsole());
@@ -85,7 +79,6 @@ class Program
 
         var serviceProvider = services.BuildServiceProvider();
 
-        // Database migrations
         try
         {
             Console.WriteLine("Checking database migrations...");
@@ -102,7 +95,6 @@ class Program
             return 1;
         }
 
-        // Execute seeding
         try
         {
             using var scope = serviceProvider.CreateScope();
@@ -110,7 +102,6 @@ class Program
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
                 
-                // Set up and start direct RabbitMQ bus to publish integration events
                 Console.WriteLine("Connecting to RabbitMQ event bus...");
                 var busControl = Bus.Factory.CreateUsingRabbitMq(cfg =>
                 {
@@ -131,9 +122,8 @@ class Program
             {
                 var userManager = scope.ServiceProvider.GetRequiredService<UserManager<Customer>>();
                 var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-                var dbContext = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
 
-                await CustomerGenerator.GenerateCustomersAsync(userManager, roleManager, dbContext, count);
+                await CustomerGenerator.GenerateCustomersAsync(userManager, roleManager, count);
             }
         }
         catch (Exception ex)
