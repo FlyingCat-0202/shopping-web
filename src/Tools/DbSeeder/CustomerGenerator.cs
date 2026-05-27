@@ -1,4 +1,5 @@
 using System.Text;
+using Bogus;
 using Identity.Domain.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -40,7 +41,7 @@ public static class CustomerGenerator
             .ToListAsync();
         var existingPhonesSet = new HashSet<string>(existingPhones.Where(p => p != null)!, StringComparer.OrdinalIgnoreCase);
 
-        var random = new Random();
+        var faker = new Faker("vi");
         int seededCount = 0;
         int maxAttempts = totalToSeed * 10;
         int attempts = 0;
@@ -49,14 +50,17 @@ public static class CustomerGenerator
         {
             attempts++;
 
-            string lastName = LastNames[random.Next(LastNames.Length)];
-            string middleName = MiddleNames[random.Next(MiddleNames.Length)];
-            string firstName = FirstNames[random.Next(FirstNames.Length)];
+            string lastName = faker.PickRandom(LastNames);
+            string middleName = faker.PickRandom(MiddleNames);
+            string firstName = faker.Name.FirstName();
             string fullName = $"{lastName} {middleName} {firstName}";
 
-            string rawEmailPrefix = RemoveDiacritics($"{firstName.ToLower()}{middleName.ToLower()}{lastName.ToLower()}{random.Next(100, 9999)}");
-            string domain = EmailDomains[random.Next(EmailDomains.Length)];
-            string email = $"{rawEmailPrefix}@{domain}";
+            string rawEmailPrefix = RemoveDiacritics($"{firstName}.{middleName}.{lastName}".ToLowerInvariant())
+                .Replace(" ", "")
+                .Replace("..", ".");
+            string domain = faker.PickRandom(EmailDomains);
+            string emailSuffix = faker.Random.Number(1_000, 999_999).ToString();
+            string email = $"{rawEmailPrefix}{emailSuffix}@{domain}";
 
             if (existingEmailsSet.Contains(email))
             {
@@ -64,8 +68,8 @@ public static class CustomerGenerator
             }
 
             string[] prefixes = ["090", "091", "098", "097", "035", "038", "086", "077", "093", "094"];
-            string prefix = prefixes[random.Next(prefixes.Length)];
-            string phoneSuffix = random.Next(1000000, 9999999).ToString();
+            string prefix = faker.PickRandom(prefixes);
+            string phoneSuffix = faker.Random.Number(1_000_000, 9_999_999).ToString();
             string phone = $"{prefix}{phoneSuffix}";
 
             if (existingPhonesSet.Contains(phone))
@@ -73,10 +77,10 @@ public static class CustomerGenerator
                 continue;
             }
 
-            int num = random.Next(1, 450);
-            string street = Streets[random.Next(Streets.Length)];
-            string district = Districts[random.Next(Districts.Length)];
-            string city = Cities[random.Next(Cities.Length)];
+            int num = faker.Random.Number(1, 450);
+            string street = faker.PickRandom(Streets);
+            string district = faker.PickRandom(Districts);
+            string city = faker.PickRandom(Cities);
             string address = $"{num} Đường {street}, {district}, {city}";
 
             var customer = new Customer

@@ -92,7 +92,8 @@ builder.Services.AddMassTransit(x =>
 
         cfg.ReceiveEndpoint("elastic-search", e =>
         {
-            e.ConcurrentMessageLimit = 2;
+            e.PrefetchCount = 128;
+            e.ConcurrentMessageLimit = 32;
             e.ConfigureConsumer<SyncProductToElasticConsumer>(context);
         });
     });

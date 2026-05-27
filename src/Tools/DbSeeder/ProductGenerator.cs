@@ -1,4 +1,5 @@
 using EventBus.Contracts;
+using Bogus;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Product.Domain.Entities;
@@ -20,6 +21,31 @@ public static class ProductGenerator
         ["Đồ lót"] = ["Quần lót nam boxer", "Quần lót nữ su đúc", "Áo ngực cotton basic", "Áo lá học sinh mềm mại", "Quần sịp ren", "Quần xilip nam tính"],
         ["Đồ bộ"] = ["Đồ bộ mặc nhà cotton", "Đồ bộ mặc nhà lụa", "Đồ bộ mặc nhà nỉ", "Đồ bộ mặc nhà thun lạnh", "Đồ bộ mặc nhà oversized", "Đồ bộ mặc nhà pijama"]
     };
+
+    private static readonly string[] ProductBrands =
+    [
+        "Sech Studio", "Northline", "Urban Form", "Mori", "Lumi Wear", "Coastal", "Aster",
+        "Routine Lab", "Nexa", "Bloom Atelier", "Terra Mode", "Maison Daily", "Arc Fit"
+    ];
+
+    private static readonly string[] Materials =
+    [
+        "cotton compact", "linen blend", "modal mềm", "denim stretch", "canvas dày",
+        "fleece nhẹ", "pique thoáng khí", "poly quick-dry", "da tổng hợp cao cấp",
+        "rib co giãn", "lụa satin", "nỉ bông"
+    ];
+
+    private static readonly string[] Fits =
+    [
+        "regular fit", "relaxed fit", "slim fit", "oversized", "boxy fit",
+        "straight fit", "tapered fit", "cropped fit", "athletic fit"
+    ];
+
+    private static readonly string[] Collections =
+    [
+        "City Basics", "Weekend Edit", "Workday Comfort", "Summer Ease", "Travel Ready",
+        "Active Daily", "Minimal Wardrobe", "Soft Living", "Street Essential"
+    ];
 
     private static readonly string[] Adjectives =
     [
@@ -109,6 +135,8 @@ public static class ProductGenerator
 
         var productsToAdd = new List<ProductEntity>();
         var random = new Random();
+        var faker = new Faker("vi");
+        var categoryNames = Subcategories.Keys.ToArray();
 
         int generatedCount = 0;
         int maxAttempts = totalToSeed * 10;
@@ -117,15 +145,19 @@ public static class ProductGenerator
         while (generatedCount < totalToSeed && attempts < maxAttempts)
         {
             attempts++;
-            var categoryName = Subcategories.Keys.ElementAt(random.Next(Subcategories.Count));
+            var categoryName = faker.PickRandom(categoryNames);
             var categoryId = categoryMap[categoryName];
 
-            var subcatOptions = Subcategories[categoryName];
-            var subcat = subcatOptions[random.Next(subcatOptions.Length)];
-            var adj = Adjectives[random.Next(Adjectives.Length)];
-            var color = Colors[random.Next(Colors.Length)];
+            var subcat = faker.PickRandom(Subcategories[categoryName]);
+            var style = faker.PickRandom(Adjectives);
+            var color = faker.PickRandom(Colors);
+            var brand = faker.PickRandom(ProductBrands);
+            var material = faker.PickRandom(Materials);
+            var fit = faker.PickRandom(Fits);
+            var collection = faker.PickRandom(Collections);
+            var sku = faker.Random.Guid().ToString("N")[..8].ToUpperInvariant();
 
-            string name = $"{subcat} {adj} màu {color}";
+            string name = GenerateProductName(brand, subcat, material, fit, color, sku);
 
             if (existingNamesSet.Contains(name))
             {
@@ -140,7 +172,7 @@ public static class ProductGenerator
             var images = UnsplashImages[categoryName];
             var imageUrl = images[random.Next(images.Length)];
 
-            string description = GenerateDescription(name, subcat, adj, color);
+            string description = GenerateDescription(faker, name, subcat, material, fit, color, collection);
 
             var product = new ProductEntity
             {
@@ -253,17 +285,36 @@ public static class ProductGenerator
         return random.Next(15, 60) * 10000; // Default 150k - 600k
     }
 
-    private static string GenerateDescription(string name, string subcat, string adj, string color)
+    private static string GenerateProductName(
+        string brand,
+        string subcategory,
+        string material,
+        string fit,
+        string color,
+        string sku)
+        => $"{brand} {subcategory} {material} {fit} màu {color} ({sku})";
+
+    private static string GenerateDescription(
+        Faker faker,
+        string name,
+        string subcat,
+        string material,
+        string fit,
+        string color,
+        string collection)
     {
+        var occasion = faker.PickRandom("đi làm", "đi học", "dạo phố", "du lịch", "tập luyện nhẹ", "mặc nhà", "cuối tuần");
+        var care = faker.PickRandom("ít nhăn", "dễ giặt", "giữ form tốt", "thoáng khí", "mềm da", "dễ phối layer");
+        var detail = faker.PickRandom("đường may gọn", "bề mặt vải mịn", "phom dáng cân đối", "màu sắc dễ phối", "cảm giác mặc nhẹ");
+
         var templates = new[]
         {
-            $"Sản phẩm {name} được sản xuất từ chất liệu cao cấp, mang lại cảm giác dễ chịu khi mặc. Tone màu {color} sang trọng, dễ dàng kết hợp với nhiều outfit hàng ngày.",
-            $"Thiết kế {adj} thanh lịch, hiện đại giúp tôn lên phong cách của bạn. {subcat} màu {color} phù hợp cho cả đi làm, đi học hoặc các hoạt động dã ngoại ngoài trời.",
-            $"{name} là dòng sản phẩm đón đầu xu hướng thời trang. Bề mặt vải mềm mịn, đường may tỉ mỉ chắc chắn. Thể hiện nét cá tính tinh tế qua màu sắc {color} tươi mới.",
-            $"Mang phong cách {adj} độc đáo kết hợp cùng gam màu {color} trung tính. Sản phẩm {subcat} này mang lại sự thoải mái tuyệt đối trong mọi vận động thường nhật."
+            $"{name} thuộc bộ sưu tập {collection}, dùng chất liệu {material} với phom {fit}. Tone {color} dễ phối cho lịch trình {occasion}, nổi bật nhờ {detail}.",
+            $"{subcat} màu {color} được hoàn thiện theo hướng {care}, phù hợp để mặc {occasion}. Chất liệu {material} tạo cảm giác thoải mái mà vẫn giữ vẻ chỉn chu.",
+            $"Thiết kế {fit} trong dòng {collection} giúp {name} cân bằng giữa tiện dụng và phong cách. Điểm cộng là {detail}, chất vải {material} và sắc {color} hiện đại.",
+            $"{name} là lựa chọn gọn gàng cho tủ đồ hằng ngày: {care}, {detail}, dễ kết hợp với sneaker, túi tote hoặc các lớp áo khoác nhẹ."
         };
 
-        var index = Math.Abs(name.GetHashCode()) % templates.Length;
-        return templates[index];
+        return faker.PickRandom(templates);
     }
 }
