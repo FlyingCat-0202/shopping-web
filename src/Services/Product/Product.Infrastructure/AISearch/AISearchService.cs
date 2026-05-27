@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using Microsoft.Extensions.Configuration;
 using Product.Domain.Entities;
 
@@ -36,6 +36,22 @@ public class GeminiEmbeddingService : IAiEmbeddingService
         var result = await response.Content.ReadFromJsonAsync<GeminiEmbeddingResponse>();
         return result?.Embedding?.Values ?? throw new Exception("Không thể parse vector từ Gemini.");
     }
+
+    // Gemini không có batch endpoint nên fallback: gọi song song, giới hạn 5 request đồng thời
+    // để tránh hit rate-limit của Gemini API.
+    public async Task<float[]?[]> GetVectorsAsync(string[] texts)
+    {
+        var results = new float[]?[texts.Length];
+        await Parallel.ForEachAsync(
+            texts.Select((text, i) => (text, i)),
+            new ParallelOptions { MaxDegreeOfParallelism = 5 },
+            async (item, ct) =>
+            {
+                try   { results[item.i] = await GetVectorAsync(item.text); }
+                catch { results[item.i] = null; }
+            });
+        return results;
+    }
 }
 
 public class LocalEmbeddingService : IAiEmbeddingService
@@ -56,13 +72,22 @@ public class LocalEmbeddingService : IAiEmbeddingService
     {
         if (string.IsNullOrWhiteSpace(text)) return Array.Empty<float>();
 
+        var vectors = await GetVectorsAsync([text]);
+        return vectors[0] ?? Array.Empty<float>();
+    }
+
+    // Infinity AI hỗ trợ input là string[] → gộp toàn bộ texts thành 1 HTTP request duy nhất.
+    // Đây là chì khóa tối ưu: thay vì N round-trip, chỉ còn 1 round-trip bất kể batch size.
+    public async Task<float[]?[]> GetVectorsAsync(string[] texts)
+    {
+        if (texts.Length == 0) return [];
+
         var requestUrl = $"{_apiUrl}/embeddings";
 
-        // Payload chuẩn của OpenAI mà Infinity hỗ trợ
         var payload = new
         {
             model = "BAAI/bge-m3",
-            input = new[] { text }
+            input = texts           // ← gửi toàn bộ mảng trong 1 lần
         };
 
         try
@@ -71,15 +96,19 @@ public class LocalEmbeddingService : IAiEmbeddingService
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<InfinityEmbeddingResponse>();
+            if (result?.Data is null) throw new Exception("Infinity: Data bị null.");
 
-            // Trả về mảng vector đầu tiên
-            return result?.Data?.FirstOrDefault()?.Embedding ?? throw new Exception("Infinity: Vetor bị null.");
+            // API trả về theo đúng thứ tự input
+            return result.Data
+                .OrderBy(d => d.Index)
+                .Select(d => (float[]?)d.Embedding)
+                .ToArray();
         }
         catch (Exception ex)
         {
-            // Trả về null nếu có lỗi để hệ thống tự động Fallback sang BM25 Full-text
-            Console.WriteLine($"Lỗi khi gọi Infinity AI: {ex.Message}");
-            return Array.Empty<float>();
+            Console.WriteLine($"Lỗi khi gọi Infinity AI batch: {ex.Message}");
+            // Trả về mảng null cho tất cả — consumer sẽ bỏ qua vector, search fallback BM25
+            return new float[]?[texts.Length];
         }
     }
 }

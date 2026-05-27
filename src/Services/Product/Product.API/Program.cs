@@ -53,7 +53,15 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<ProductCreationConsumer>();
     x.AddConsumer<ProductDeleteConsumer>();
     x.AddConsumer<ProductUpdateConsumer>();
-    x.AddConsumer<SyncProductToElasticConsumer>();
+
+    // Batch consumer: gộp tối đa 100 ProductCreatedEvent, chờ tối đa 2 giây.
+    // MassTransit tự động nhóm message từ queue vào Batch<T> trước khi gọi Consume().
+    x.AddConsumer<SyncProductToElasticConsumer>(cfg =>
+    {
+        cfg.Options<BatchOptions>(o => o
+            .SetMessageLimit(100)       // tối đa 100 message/batch
+            .SetTimeLimit(TimeSpan.FromSeconds(2))); // hoặc flush sau 2 giây nếu chưa đủ 100
+    });
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -92,8 +100,14 @@ builder.Services.AddMassTransit(x =>
 
         cfg.ReceiveEndpoint("elastic-search", e =>
         {
-            e.PrefetchCount = 128;
-            e.ConcurrentMessageLimit = 32;
+            // ── Batch Consumer config ────────────────────────────────────────────────
+            // PrefetchCount: kéo sẵn 2 × batch size message từ broker vào buffer.
+            // ConcurrentMessageLimit: số batch được xử lý song song.
+            //   → 2 batch đồng thời × 100 msg = 200 msg in-flight cùng lúc.
+            //   → Mỗi batch: 1 AI call + 1 ES Bulk call = rất nhẹ.
+            // ────────────────────────────────────────────────────────────────────────
+            e.PrefetchCount = 200;
+            e.ConcurrentMessageLimit = 2;
             e.ConfigureConsumer<SyncProductToElasticConsumer>(context);
         });
     });
