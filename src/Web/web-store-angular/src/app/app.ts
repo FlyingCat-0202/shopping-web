@@ -136,7 +136,9 @@ export class App implements OnInit {
   readonly auth = signal<AuthState | null>(this.api.auth);
   readonly apiConfig = signal<ApiConfig>(this.api.config);
   readonly products = signal<Product[]>([]);
+  readonly productCache = signal<Record<string, Product>>({});
   readonly categories = signal<Category[]>([]);
+  readonly catalogTotal = signal(0);
   readonly cart = signal<CartItem[]>([]);
   readonly orders = signal<OrderSummary[]>([]);
   readonly selectedOrder = signal<OrderDetail | null>(null);
@@ -209,10 +211,12 @@ export class App implements OnInit {
   );
 
   readonly filteredProducts = computed(() => {
+    if (!this.searchActive()) return this.products();
+
     const category = this.selectedCategory();
     const stock = this.selectedStock();
     const sort = this.selectedSort();
-    const sourceProducts = this.searchActive() ? this.searchResults() : this.products();
+    const sourceProducts = this.searchResults();
 
     const filtered = sourceProducts.filter((product) => {
       const categoryMatch = category === 'All' || String(product.categoryId) === category;
@@ -234,13 +238,10 @@ export class App implements OnInit {
   readonly visibleProducts = computed(() => {
     const products = this.filteredProducts();
 
-    if (this.searchActive()) return products;
-
-    const start = (this.catalogPage() - 1) * this.productPageSize();
-    return products.slice(start, start + this.productPageSize());
+    return products;
   });
 
-  readonly productTotal = computed(() => (this.searchActive() ? this.searchTotal() : this.filteredProducts().length));
+  readonly productTotal = computed(() => (this.searchActive() ? this.searchTotal() : this.catalogTotal()));
   readonly productPage = computed(() => (this.searchActive() ? this.searchPage() : this.catalogPage()));
   readonly productPageSize = computed(() => 12);
   readonly productTotalPages = computed(() => Math.max(1, Math.ceil(this.productTotal() / this.productPageSize())));
@@ -334,16 +335,35 @@ export class App implements OnInit {
     await this.loadUnreadNotificationCount();
   }
 
-  async loadCatalog(): Promise<void> {
+  async loadCatalog(page = this.catalogPage()): Promise<void> {
     this.connectionState.set('loading');
 
     try {
-      const payload = await this.api.request<any>('product', '/api/products/');
+      const nextPage = Math.max(1, page);
+      const params = new URLSearchParams({
+        Page: String(nextPage),
+        PageSize: String(this.productPageSize()),
+        Sort: this.selectedSort(),
+      });
+
+      if (this.selectedCategory() !== 'All') {
+        params.set('CategoryId', this.selectedCategory());
+      }
+
+      if (this.selectedStock() !== 'All') {
+        params.set('Stock', this.selectedStock());
+      }
+
+      const payload = await this.api.request<any>('product', `/api/products/?${params.toString()}`);
       const products = payload.products ?? payload.Products ?? [];
       const categories = payload.categories ?? payload.Categories ?? [];
+      const normalizedProducts = products.map((product: any, index: number) => this.normalizeProduct(product, index));
 
-      this.products.set(products.map((product: any, index: number) => this.normalizeProduct(product, index)));
+      this.products.set(normalizedProducts);
+      this.cacheProducts(normalizedProducts);
       this.categories.set(categories.map((category: any) => this.normalizeCategory(category)));
+      this.catalogTotal.set(Number(payload.totalItems ?? payload.TotalItems ?? normalizedProducts.length));
+      this.catalogPage.set(Number(payload.currentPage ?? payload.CurrentPage ?? nextPage));
       this.connectionState.set('live');
 
       if (!this.productModel.categoryId && this.categories().length > 0) {
@@ -355,6 +375,7 @@ export class App implements OnInit {
       }
     } catch (error) {
       this.products.set([]);
+      this.catalogTotal.set(0);
       this.categories.set([]);
       this.connectionState.set('offline');
       this.showToast(this.api.messageFromError(error));
@@ -370,7 +391,12 @@ export class App implements OnInit {
     try {
       const payload = await this.api.request<any>('cart', '/api/cart/', { auth: true });
       const items = payload.items ?? payload.Items ?? [];
-      this.cart.set(items.map((item: any) => this.normalizeCartItem(item)).filter((item: CartItem) => item.quantity > 0));
+      const cartItems: CartItem[] = items
+        .map((item: any) => this.normalizeCartItem(item))
+        .filter((item: CartItem) => item.quantity > 0);
+
+      this.cart.set(cartItems);
+      await this.ensureProductsLoaded(cartItems.map((item) => item.productId));
     } catch (error) {
       this.showToast(this.api.messageFromError(error));
     }
@@ -583,6 +609,7 @@ export class App implements OnInit {
 
       this.searchAppliedKeyword.set(keyword);
       this.searchResults.set(products);
+      this.cacheProducts(products);
       this.searchTotal.set(Number(payload.totalItems ?? payload.TotalItems ?? products.length));
       this.searchPage.set(Number(payload.currentPage ?? payload.CurrentPage ?? nextPage));
 
@@ -611,6 +638,8 @@ export class App implements OnInit {
     this.searchResults.set([]);
     this.searchTotal.set(0);
     this.searchPage.set(1);
+    this.catalogPage.set(1);
+    void this.loadCatalog(1);
   }
 
   async goToProductPage(page: number): Promise<void> {
@@ -622,7 +651,7 @@ export class App implements OnInit {
       return;
     }
 
-    this.catalogPage.set(nextPage);
+    await this.loadCatalog(nextPage);
   }
 
   async addToCart(product: Product): Promise<void> {
@@ -865,6 +894,12 @@ export class App implements OnInit {
 
       this.products.update((current) => current.filter((item) => item.id !== product.id));
       this.searchResults.update((current) => current.filter((item) => item.id !== product.id));
+      this.productCache.update((current) => {
+        const next = { ...current };
+        delete next[product.id];
+        return next;
+      });
+      this.catalogTotal.update((total) => Math.max(0, total - 1));
       this.showToast('Product delete queued.');
 
       window.setTimeout(() => {
@@ -1423,8 +1458,44 @@ private normalizeOrderDetail(order: any): OrderDetail {
     }
   }
 
+  private async ensureProductsLoaded(productIds: string[]): Promise<void> {
+    const missingIds = Array.from(new Set(productIds))
+      .filter((productId) => productId && !this.findProduct(productId));
+
+    if (missingIds.length === 0) return;
+
+    const products = await Promise.all(missingIds.map((productId) => this.fetchProduct(productId)));
+    this.cacheProducts(products.filter((product): product is Product => Boolean(product)));
+  }
+
+  private async fetchProduct(productId: string): Promise<Product | null> {
+    try {
+      const response = await this.api.request<any>('product', `/api/products/${productId}`);
+      return this.normalizeProduct(response, 0);
+    } catch {
+      return null;
+    }
+  }
+
+  private cacheProducts(products: Product[]): void {
+    if (products.length === 0) return;
+
+    this.productCache.update((current) => {
+      const next = { ...current };
+      for (const product of products) {
+        next[product.id] = product;
+      }
+
+      return next;
+    });
+  }
+
   private findProduct(productId: string): Product | undefined {
-    return this.products().find((product) => product.id === productId);
+    return (
+      this.products().find((product) => product.id === productId) ??
+      this.searchResults().find((product) => product.id === productId) ??
+      this.productCache()[productId]
+    );
   }
 
   private placeholderProduct(productId: string, quantity: number): Product {
@@ -1443,7 +1514,7 @@ private normalizeOrderDetail(order: any): OrderDetail {
   private localSearch(keyword: string): Product[] {
     const normalizedKeyword = keyword.toLowerCase();
 
-    return this.products().filter((product) =>
+    return Object.values(this.productCache()).filter((product) =>
       [product.name, product.categoryName, product.description]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(normalizedKeyword)),
@@ -1467,7 +1538,13 @@ private normalizeOrderDetail(order: any): OrderDetail {
   }
 
   private resetProductPage(): void {
-    if (!this.searchActive()) this.catalogPage.set(1);
+    if (this.searchActive()) {
+      void this.searchProducts(1, false);
+      return;
+    }
+
+    this.catalogPage.set(1);
+    void this.loadCatalog(1);
   }
 
   private showToast(message: string): void {

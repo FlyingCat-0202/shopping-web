@@ -24,8 +24,9 @@ var infinityApi = builder.AddContainer("infinity-ai", "michaelf34/infinity")
     .WithImageTag("latest")
     .WithHttpEndpoint(port: 7997, targetPort: 7997, name: "api")
     .WithEnvironment("MODEL_ID", "BAAI/bge-m3") 
-    .WithEnvironment("PORT", "7997");
-     //.WithEnvironment("DEVICE", "cuda");
+    .WithEnvironment("PORT", "7997")
+    .WithEnvironment("DEVICE", "cuda")
+    .WithContainerRuntimeArgs("--gpus", "all");
 
 // ── Databases (mỗi service dùng DB riêng) ────────────────────────────────────
 var orderDb = postgres.AddDatabase("order-db");

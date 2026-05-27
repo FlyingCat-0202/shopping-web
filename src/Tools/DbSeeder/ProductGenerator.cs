@@ -17,20 +17,21 @@ public static class ProductGenerator
         ["Giày"] = ["Giày sneaker trắng", "Giày chạy bộ nhẹ", "Giày canvas cổ thấp", "Giày boot da nam", "Giày loafer thanh lịch", "Sandal quai ngang", "Dép slide êm ái"],
         ["Túi & phụ kiện"] = ["Balo laptop chống nước", "Túi tote canvas", "Túi đeo chéo mini", "Ví da nam bifold", "Thắt lưng da bò", "Nón baseball basic", "Đồng hồ classic dây da", "Kính mát thời trang", "Vớ cổ cao cotton"],
         ["Đồ thể thao"] = ["Áo thun quickdry thể thao", "Quần short chạy bộ 2 lớp", "Quần legging co giãn", "Túi gym trống du lịch", "Bình nước giữ nhiệt thể thao"],
-        ["Đồ lót"] = ["Quần lót nam boxer", "Quần lót nữ su đúc", "Áo ngực cotton basic", "Áo lá học sinh mềm mại"]
+        ["Đồ lót"] = ["Quần lót nam boxer", "Quần lót nữ su đúc", "Áo ngực cotton basic", "Áo lá học sinh mềm mại", "Quần sịp ren", "Quần xilip nam tính"],
+        ["Đồ bộ"] = ["Đồ bộ mặc nhà cotton", "Đồ bộ mặc nhà lụa", "Đồ bộ mặc nhà nỉ", "Đồ bộ mặc nhà thun lạnh", "Đồ bộ mặc nhà oversized", "Đồ bộ mặc nhà pijama"]
     };
 
     private static readonly string[] Adjectives =
     [
         "Premium", "Basic", "Everyday", "Classic", "Sporty", "Oversized", "Linen", "Comfort", 
         "Streetwear", "Retro", "Minimalist", "Vintage", "Tech", "Active", "Ultra", "Dynamic", 
-        "Soft", "Air", "Luxe", "Flex"
+        "Soft", "Air", "Luxe", "Flex", "Essential", "Modern", "Timeless", "Versatile", "Signature", "Bold", "Sleek", "Edgy", "Relaxed", "Tailored", "Lightweight", "Durable", "Breathable", "Cozy", "Chic", "Functional", "Innovative", "Sustainable", "Classic Fit", "Slim Fit", "Regular Fit", "Relaxed Fit", "Athletic Fit", "Tapered Fit", "Straight Fit", "Skinny Fit", "Loose Fit", "Cropped Fit", "High-Waisted", "Mid-Rise", "Low-Rise", "Ankle-Length", "Full-Length", "Short Sleeve", "Long Sleeve", "Sleeveless", "Hooded", "Collared", "Button-Up", "Pullover", "Zip-Up", "V-Neck", "Crew Neck", "Off-Shoulder", "Raglan Sleeve", "Drop Shoulder", "Dolman Sleeve", "Balloon Sleeve", "Bishop Sleeve", "Lantern Sleeve", "Puff Sleeve", "Bell Sleeve", "Kimono Sleeve", "Cap Sleeve", "Flutter Sleeve", "Bardot Neckline", "Sweetheart Neckline", "Scoop Neckline", "Boat Neckline", "Halter Neckline", "Asymmetrical Neckline", "Cowl Neckline", "Turtleneck", "Mock Neck", "Scoop Back", "Keyhole Back", "Open Back", "Strappy Back", "Racerback", "Crossback", "Cutout Back", "Tie-Back", "Peplum Waist", "Empire Waist", "Drop Waist", "High-Low Hemline", "Asymmetrical Hemline", "Curved Hemline", "Straight Hemline", "Raw Hemline", "Frayed Hemline", "Side Slit", "Front Slit", "Back Slit", "Wrap Style", "Draped Style", "Layered Style", "Colorblock Style", "Printed Style", "Embroidered Style", "Textured Style", "Ribbed Style", "Striped Style", "Plaid Style", "Floral Style", "Geometric Style", "Abstract Style", "Animal Print Style", "Camouflage Style", "Tie-Dye Style", "Ombre Style", "Patchwork Style", "Distressed Style", "Vintage Wash", "Acid Wash", "Stone Wash", "Bleached Wash", "Raw Denim", "Selvedge Denim", "Stretch Denim", "Rigid Denim"
     ];
 
     private static readonly string[] Colors =
     [
         "Đen", "Trắng", "Navy", "Xám Melange", "Be Cát", "Xanh Rêu", "Nâu Đất", "Đỏ Burgundy", 
-        "Vàng Mustard", "Cam Đất", "Xanh Dương", "Hồng Pastel", "Tím Than", "Xanh Mint", "Kem Sữa"
+        "Vàng Mustard", "Cam Đất", "Xanh Dương", "Hồng Pastel", "Tím Than", "Xanh Mint", "Kem Sữa", "Xám Tro", "Đỏ Gạch", "Xanh Olive", "Vàng Chanh", "Cam Cháy", "Xanh Lam", "Hồng Phấn", "Tím Oải Hương", "Xanh Ngọc", "Kem Mơ", "Xám Khói", "Đỏ Ruby", "Xanh Peacock", "Vàng Mùt", "Cam San Hô", "Xanh Denim", "Hồng Cánh Sen", "Tím Violet", "Xanh Aqua", "Kem Latte", "Xám Xi Măng", "Đỏ Đô", "Xanh Teal", "Vàng Pha Lê", "Cam Gạch", "Xanh Indigo", "Hồng Fuchsia", "Tím Amethyst", "Xanh Biển Sáng", "Kem Vanilla", "Xám Bạc", "Đỏ Hồng Ngọc", "Xanh Peacock Sáng", "Vàng Chanh Tươi", "Cam San Hô Nhạt", "Xanh Denim Nhạt", "Hồng Cánh Sen Nhạt", "Tím Violet Nhạt", "Xanh Aqua Nhạt", "Kem Latte Nhạt", "Xám Xi Măng Nhạt", "Đỏ Đô Nhạt", "Xanh Teal Nhạt", "Vàng Pha Lê Nhạt", "Cam Gạch Nhạt", "Xanh Indigo Nhạt", "Hồng Fuchsia Nhạt", "Tím Amethyst Nhạt", "Xanh Biển Sáng Nhạt", "Kem Vanilla Nhạt", "Xám Bạc Nhạt", "Đỏ Hồng Ngọc Nhạt", "Xanh Peacock Sáng Nhạt", "Vàng Chanh Tươi Nhạt", "Cam San Hô Nhạt", "Xanh Denim Nhạt", "Hồng Cánh Sen Nhạt", "Tím Violet Nhạt", "Xanh Aqua Nhạt", "Kem Latte Nhạt", "Xám Xi Măng Nhạt", "Đỏ Đô Nhạt", "Xanh Teal Nhạt", "Vàng Pha Lê Nhạt", "Cam Gạch Nhạt", "Xanh Indigo Nhạt", "Hồng Fuchsia Nhạt", "Tím Amethyst Nhạt", "Xanh Biển Sáng Nhạt", "Kem Vanilla Nhạt", "Xám Bạc Nhạt", "Đỏ Hồng Ngọc Nhạt", "Xanh Peacock Sáng Nhạt", "Vàng Chanh Tươi Nhạt", "Cam San Hô Nhạt", "Xanh Denim Nhạt", "Hồng Cánh Sen Nhạt", "Tím Violet Nhạt", "Xanh Aqua Nhạt", "Kem Latte Nhạt", "Xám Xi Măng Nhạt", "Đỏ Đô Nhạt", "Xanh Teal Nhạt", "Vàng Pha Lê Nhạt", "Cam Gạch Nhạt", "Xanh Indigo Nhạt", "Hồng Fuchsia Nhạt", "Tím Amethyst Nhạt", "Xanh Biển Sáng Nhạt", "Kem Vanilla Nhạt", "Xám Bạc Nhạt", "Đỏ Hồng Ngọc Nhạt", "Xanh Peacock Sáng Nhạt", "Vàng Chanh Tươi Nhạt", "Cam San Hô Nhạt", "Xanh Denim Nhạt", "Hồng Cánh Sen Nhạt", "Tím Violet Nhạt", "Xanh Aqua Nhạt", "Kem Latte Nhạt", "Xám Xi Măng Nhạt", "Đỏ Đô Nhạt", "Xanh Teal Nhạt", "Vàng Pha Lê Nhạt", "Cam Gạch Nhạt", "Xanh Indigo Nhạt", "Hồng Fuchsia Nhạt", "Tím Amethyst Nhạt", "Xanh Biển Sáng Nhạt", "Kem Vanilla Nhạt", "Xám Bạc Nhạt"
     ];
 
     private static readonly Dictionary<string, string[]> UnsplashImages = new()
@@ -83,6 +84,12 @@ public static class ProductGenerator
         ["Đồ lót"] =
         [
             "https://images.unsplash.com/photo-1596561073167-93043c983a00?auto=format&fit=crop&w=900&q=80"
+        ],
+        ["Đồ bộ"] =
+        [
+            "https://images.unsplash.com/photo-1600185364417-9bafcaa1e8c6?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1600185364417-9bafcaa1e8c6?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1600185364417-9bafcaa1e8c6?auto=format&fit=crop&w=900&q=80"
         ]
     };
 
@@ -191,7 +198,8 @@ public static class ProductGenerator
             ["Giày"] = "Sneaker, giày chạy bộ, canvas, boot và sandal.",
             ["Túi & phụ kiện"] = "Balo, túi tote, ví, nón, thắt lưng, đồng hồ và phụ kiện thời trang.",
             ["Đồ thể thao"] = "Trang phục và phụ kiện tập luyện, chạy bộ và di chuyển ngoài trời.",
-            ["Đồ lót"] = "Trang phục lót thoải mái, co giãn tốt và thoáng khí."
+            ["Đồ lót"] = "Trang phục lót thoải mái, co giãn tốt và thoáng khí.",
+            ["Đồ bộ"] = "Đồ mặc nhà mềm mại, thoải mái và phong cách."
         };
 
         var categoryNames = categoryDefinitions.Keys.ToList();

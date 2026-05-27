@@ -11,6 +11,8 @@ using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.Domain.Entities;
 using Product.Infrastructure.Data;
 using Product.Infrastructure.AISearch;
+using Product.API.Seed;
+using ProductEntity = Product.Domain.Entities.Product;
 
 namespace Product.API.Endpoints;
 
@@ -22,15 +24,28 @@ public static class ProductEndpoints
             .WithTags("Products");
 
         // Lấy danh sách products và categories
-        group.MapGet("/", async (ProductDbContext db, ILogger<Program> logger, CancellationToken cancellationToken) =>
+        group.MapGet("/", async (
+            [AsParameters] ProductCatalogRequest request,
+            ProductDbContext db,
+            ILogger<Program> logger,
+            CancellationToken cancellationToken) =>
         {
             try
             {
-                // 1. Lấy danh sách Products
-                var productList = await db.Products
+                var page = Math.Max(request.Page, 1);
+                var pageSize = Math.Clamp(request.PageSize, 1, 50);
+
+                var query = db.Products
                     .AsNoTracking()
-                    .Where(p => p.IsActive)
-                    .OrderBy(p => p.Name)
+                    .Where(p => p.IsActive);
+
+                query = ApplyCatalogFilters(query, request.CategoryId, request.Stock);
+
+                var totalItems = await query.CountAsync(cancellationToken);
+
+                var productList = await ApplyCatalogSort(query, request.Sort)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
                     .Select(p => new ProductResponse(
                         p.Id,
                         p.Name,
@@ -42,9 +57,9 @@ public static class ProductEndpoints
                         p.Category.Name))
                     .ToListAsync(cancellationToken);
 
-                // 2. Lấy danh sách Categories
                 var categoryList = await db.Categories
                     .AsNoTracking()
+                    .OrderBy(c => c.Name)
                     .Select(c => new CategoryResponse(
                         c.Id,
                         c.Name,
@@ -52,7 +67,12 @@ public static class ProductEndpoints
                     ))
                     .ToListAsync(cancellationToken);
 
-                return Results.Ok(new ProductCategoryResponse(productList, categoryList));
+                return Results.Ok(new ProductCategoryPageResponse(
+                    productList,
+                    categoryList,
+                    totalItems,
+                    page,
+                    pageSize));
             }
             catch (Exception ex)
             {
@@ -246,6 +266,26 @@ public static class ProductEndpoints
         .AddEndpointFilter<ValidationFilter<ProductRequest>>()
         .RequireAuthorization(EndpointHelpers.AdminOnly)
         .AddEndpointFilter<IdempotencyFilter>();
+
+        group.MapPost("/seed", async (
+            ProductDbContext db,
+            IPublishEndpoint publishEndpoint,
+            ILogger<Program> logger) =>
+        {
+            try
+            {
+                await ProductSeedData.SeedAsync(db, publishEndpoint, logger);
+                return Results.Ok(new { message = "Đã chạy lệnh Seed dữ liệu thành công! Hãy kiểm tra Elasticsearch." });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Lỗi trong quá trình Seed data");
+                return Results.Problem("Có lỗi xảy ra khi Seed dữ liệu: " + ex.Message);
+            }
+        })
+        .WithName("SeedProducts")
+        .WithDescription("Tự động nạp 100 sản phẩm mẫu vào Database và Elasticsearch");
+        // .RequireAuthorization(EndpointHelpers.AdminOnly); // Mở comment dòng này nếu bắt buộc phải có token Admin mới được seed
 
         group.MapGet("/search", async Task<IResult> (
             [AsParameters] SearchProductRequest request,
@@ -478,4 +518,33 @@ public static class ProductEndpoints
             Items = items
         });
     }
+
+    private static IQueryable<ProductEntity> ApplyCatalogFilters(
+        IQueryable<ProductEntity> query,
+        int? categoryId,
+        string? stock)
+    {
+        if (categoryId is > 0)
+            query = query.Where(p => p.CategoryId == categoryId.Value);
+
+        query = stock?.Trim().ToLowerInvariant() switch
+        {
+            "instock" => query.Where(p => p.StockQuantity > 0),
+            "outofstock" => query.Where(p => p.StockQuantity <= 0),
+            _ => query
+        };
+
+        return query;
+    }
+
+    private static IOrderedQueryable<ProductEntity> ApplyCatalogSort(
+        IQueryable<ProductEntity> query,
+        string? sort)
+        => sort?.Trim().ToLowerInvariant() switch
+        {
+            "price-asc" => query.OrderBy(p => p.Price).ThenBy(p => p.Name),
+            "price-desc" => query.OrderByDescending(p => p.Price).ThenBy(p => p.Name),
+            "name" => query.OrderBy(p => p.Name),
+            _ => query.OrderBy(p => p.Name)
+        };
 }
