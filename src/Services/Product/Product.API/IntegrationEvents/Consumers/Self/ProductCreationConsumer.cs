@@ -48,7 +48,9 @@ public class ProductCreationConsumer(ProductDbContext db, ILogger<ProductCreatio
                 newProduct.Price,
                 category.Name,
                 newProduct.IsActive,
-                newProduct.ImageUrl
+                newProduct.ImageUrl,
+                newProduct.CategoryId,
+                newProduct.StockQuantity
             );
             await pe.Publish(eventMsg, context.CancellationToken);
 

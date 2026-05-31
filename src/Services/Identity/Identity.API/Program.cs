@@ -1,5 +1,4 @@
 using EventBus.Extensions;
-using EventBus.Infrastructure;
 using Identity.API.Endpoints;
 using Identity.API.Seed;
 using Identity.API.Validators;
@@ -81,3 +80,5 @@ app.MapHealthChecks("/health");
 app.MapIdentityEndpoints();
 
 app.Run();
+
+public partial class Program;

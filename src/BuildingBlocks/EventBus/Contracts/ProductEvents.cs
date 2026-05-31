@@ -23,7 +23,7 @@ public record UpdateProductRequest(
 public record DeleteProductRequest(Guid Id);
 
 
-// ---------------------------- record định nghĩa cho docs Elastic ----------------------------------------
+// Record định nghĩa cho docs Elastic 
 public record ProductCreatedEvent(
     Guid Id,
     string Name,
@@ -31,7 +31,9 @@ public record ProductCreatedEvent(
     decimal Price,
     string CategoryName,
     bool IsActive,
-    string? ImageUrl = null
+    string? ImageUrl = null,
+    int CategoryId = 0,
+    int StockQuantity = 0
 );
 
 public record ProductDeletedEvent(Guid Id);
@@ -43,11 +45,16 @@ public record ProductUpdatedEvent(
     bool IsActive,
     string CategoryName,
     string? Description = null,
-    string? ImageUrl = null
+    string? ImageUrl = null,
+    int CategoryId = 0,
+    int StockQuantity = 0
 );
 
 public record SearchProductRequest(
     string Keyword,
     int Page = 1,
-    int PageSize = 10
+    int PageSize = 10,
+    int? CategoryId = null,
+    string? Stock = null,
+    string? Sort = null
 );

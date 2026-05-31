@@ -6,6 +6,9 @@ var postgresUserName = builder.AddParameter("postgres-username");
 var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 var rabbitMqUserName = builder.AddParameter("rabbitmq-username");
 var rabbitMqPassword = builder.AddParameter("rabbitmq-password", secret: true);
+var infinityAiDevice = builder.Configuration["Parameters:infinity-ai-device"]
+    ?? builder.Configuration["INFINITY_AI_DEVICE"]
+    ?? "cpu";
 
 // ── External Resources ────────────────────────────────────────────────────────
 var postgres = builder.AddPostgres("postgres", postgresUserName, postgresPassword, port: 5432)
@@ -25,8 +28,12 @@ var infinityApi = builder.AddContainer("infinity-ai", "michaelf34/infinity")
     .WithHttpEndpoint(port: 7997, targetPort: 7997, name: "api")
     .WithEnvironment("MODEL_ID", "BAAI/bge-m3") 
     .WithEnvironment("PORT", "7997")
-    .WithEnvironment("DEVICE", "cuda")
-    .WithContainerRuntimeArgs("--gpus", "all");
+    .WithEnvironment("DEVICE", infinityAiDevice);
+
+if (string.Equals(infinityAiDevice, "cuda", StringComparison.OrdinalIgnoreCase))
+{
+    infinityApi.WithContainerRuntimeArgs("--gpus", "all");
+}
 
 // ── Databases (mỗi service dùng DB riêng) ────────────────────────────────────
 var orderDb = postgres.AddDatabase("order-db");

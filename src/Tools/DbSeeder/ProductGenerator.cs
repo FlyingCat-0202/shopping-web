@@ -167,7 +167,7 @@ public static class ProductGenerator
             existingNamesSet.Add(name);
 
             decimal price = GetLogicalPrice(subcat, random);
-            int stock = random.Next(10, 150);
+            int stock = faker.Random.Bool(0.08f) ? 0 : random.Next(1, 150);
 
             var images = UnsplashImages[categoryName];
             var imageUrl = images[random.Next(images.Length)];
@@ -247,7 +247,9 @@ public static class ProductGenerator
                         product.Price,
                         categoryName,
                         product.IsActive,
-                        product.ImageUrl
+                        product.ImageUrl,
+                        product.CategoryId,
+                        product.StockQuantity
                     );
 
                     return publishEndpoint.Publish(eventMsg, ct);

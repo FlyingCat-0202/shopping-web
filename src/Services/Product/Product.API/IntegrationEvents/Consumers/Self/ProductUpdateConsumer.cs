@@ -50,7 +50,9 @@ public class ProductUpdateConsumer(ProductDbContext db, ILogger<ProductUpdateCon
                 IsActive: msg.IsActive,
                 CategoryName: categoryName,
                 Description: product.Description,
-                ImageUrl: product.ImageUrl
+                ImageUrl: product.ImageUrl,
+                CategoryId: product.CategoryId,
+                StockQuantity: product.StockQuantity
             );
 
             await pe.Publish(eventMsg, context.CancellationToken);

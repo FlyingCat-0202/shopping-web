@@ -17,9 +17,10 @@ public class OrderStatusChangedConsumer(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task Consume(ConsumeContext<OrderStatusChangedEvent> context)
-    {
-        var message = context.Message;
+        => await HandleAsync(context.Message, context.CancellationToken);
 
+    public async Task HandleAsync(OrderStatusChangedEvent message, CancellationToken cancellationToken = default)
+    {
         try
         {
             var deduplicationKey = BuildDeduplicationKey(message);
@@ -28,7 +29,7 @@ public class OrderStatusChangedConsumer(
                 .AnyAsync(n =>
                     n.SourceEventId == message.EventId ||
                     n.DeduplicationKey == deduplicationKey,
-                    context.CancellationToken);
+                    cancellationToken);
 
             if (exists)
             {
@@ -57,7 +58,7 @@ public class OrderStatusChangedConsumer(
                 dataJson,
                 message.OccurredAt));
 
-            await dbContext.SaveChangesAsync(context.CancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
                 "Created notification for customer {CustomerId}, order {OrderId}, status {NewStatus}.",

@@ -135,10 +135,16 @@ app.MapHealthChecks("/health");
 using (var scope = app.Services.CreateScope())
 {
     var elasticClient = scope.ServiceProvider.GetRequiredService<ElasticsearchClient>();
+    var db = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
+    var aiEmbeddingService = scope.ServiceProvider.GetRequiredService<IAiEmbeddingService>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     // Gọi hàm cấu hình
-    await ElasticConfigurator.SetupIndexAsync(elasticClient, logger);
+    var createdIndex = await ElasticConfigurator.SetupIndexAsync(elasticClient, logger);
+    if (createdIndex)
+    {
+        await ElasticConfigurator.RebuildIndexFromDatabaseAsync(db, elasticClient, aiEmbeddingService, logger);
+    }
 }
 app.MapProductEndpoints();
 

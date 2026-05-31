@@ -47,6 +47,10 @@ public class SyncProductToElasticConsumer(
                 Price:               msg.Price,
                 CategoryName:        msg.CategoryName,
                 IsActive:            msg.IsActive,
+                CategoryId:          msg.CategoryId,
+                StockQuantity:       msg.StockQuantity,
+                StockStatus:         ElasticProductIndex.StockStatus(msg.StockQuantity),
+                NameSort:            msg.Name,
                 Description:         msg.Description,
                 ImageUrl:            msg.ImageUrl,
                 NameEmbeddingVector: vector
@@ -109,6 +113,10 @@ public class SyncProductToElasticConsumer(
                 Price              = message.Price,
                 CategoryName       = message.CategoryName,
                 IsActive           = message.IsActive,
+                CategoryId         = message.CategoryId,
+                StockQuantity      = message.StockQuantity,
+                StockStatus        = ElasticProductIndex.StockStatus(message.StockQuantity),
+                NameSort           = message.Name,
                 Description        = message.Description,
                 ImageUrl           = message.ImageUrl,
                 NameEmbeddingVector = embeddingVector

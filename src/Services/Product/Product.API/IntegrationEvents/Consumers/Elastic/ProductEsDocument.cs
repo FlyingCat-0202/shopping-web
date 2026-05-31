@@ -6,6 +6,10 @@ public record ProductEsDocument(
     decimal Price,
     string CategoryName,
     bool IsActive,
+    int CategoryId = 0,
+    int StockQuantity = 0,
+    string? StockStatus = null,
+    string? NameSort = null,
     string? Description = null,
     string? ImageUrl = null,
     float[]? NameEmbeddingVector = null

@@ -211,28 +211,9 @@ export class App implements OnInit {
   );
 
   readonly filteredProducts = computed(() => {
-    if (!this.searchActive()) return this.products();
+    if (this.searchActive()) return this.searchResults();
 
-    const category = this.selectedCategory();
-    const stock = this.selectedStock();
-    const sort = this.selectedSort();
-    const sourceProducts = this.searchResults();
-
-    const filtered = sourceProducts.filter((product) => {
-      const categoryMatch = category === 'All' || String(product.categoryId) === category;
-      const stockMatch =
-        stock === 'All' ||
-        (stock === 'InStock' && product.stockQuantity > 0) ||
-        (stock === 'OutOfStock' && product.stockQuantity <= 0);
-
-      return categoryMatch && stockMatch;
-    });
-
-    if (sort === 'price-asc') return [...filtered].sort((a, b) => a.price - b.price);
-    if (sort === 'price-desc') return [...filtered].sort((a, b) => b.price - a.price);
-    if (sort === 'name') return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-
-    return filtered;
+    return this.products();
   });
 
   readonly visibleProducts = computed(() => {
@@ -603,6 +584,19 @@ export class App implements OnInit {
         Page: String(nextPage),
         PageSize: String(this.productPageSize()),
       });
+
+      if (this.selectedCategory() !== 'All') {
+        params.set('CategoryId', this.selectedCategory());
+      }
+
+      if (this.selectedStock() !== 'All') {
+        params.set('Stock', this.selectedStock());
+      }
+
+      if (this.selectedSort() !== 'featured') {
+        params.set('Sort', this.selectedSort());
+      }
+
       const payload = await this.api.request<any>('product', `/api/products/search?${params.toString()}`);
       const items = payload.items ?? payload.Items ?? [];
       const products = items.map((product: any, index: number) => this.normalizeSearchProduct(product, index));
@@ -633,11 +627,7 @@ export class App implements OnInit {
   }
 
   clearSearch(): void {
-    this.searchKeyword.set('');
-    this.searchAppliedKeyword.set('');
-    this.searchResults.set([]);
-    this.searchTotal.set(0);
-    this.searchPage.set(1);
+    this.clearSearchState();
     this.catalogPage.set(1);
     void this.loadCatalog(1);
   }
@@ -1079,17 +1069,38 @@ export class App implements OnInit {
 
   setCategory(value: string): void {
     this.selectedCategory.set(value);
+
+    if (this.searchActive()) {
+      this.searchPage.set(1);
+      void this.searchProducts(1, false);
+      return;
+    }
+
     this.resetProductPage();
   }
 
   setStock(value: string): void {
     this.selectedStock.set(value);
+
+    if (this.searchActive()) {
+      this.searchPage.set(1);
+      void this.searchProducts(1, false);
+      return;
+    }
+
     this.resetProductPage();
   }
 
   setSort(value: string): void {
     this.selectedSort.set(value);
     this.sortMenuOpen.set(false);
+
+    if (this.searchActive()) {
+      this.searchPage.set(1);
+      void this.searchProducts(1, false);
+      return;
+    }
+
     this.resetProductPage();
   }
 
@@ -1386,6 +1397,8 @@ private normalizeOrderDetail(order: any): OrderDetail {
   private normalizeSearchProduct(product: any, index: number): Product {
     const id = String(product.id ?? product.Id);
     const existingProduct = this.findProduct(id);
+    const categoryName = product.categoryName ?? product.CategoryName ?? existingProduct?.categoryName ?? 'Uncategorized';
+    const rawCategoryId = Number(product.categoryId ?? product.CategoryId ?? existingProduct?.categoryId ?? 0);
 
     return {
       id,
@@ -1398,8 +1411,8 @@ private normalizeOrderDetail(order: any): OrderDetail {
         product.ImageUrl ||
         existingProduct?.imageUrl ||
         this.fallbackImages[index % this.fallbackImages.length],
-      categoryId: Number(product.categoryId ?? product.CategoryId ?? existingProduct?.categoryId ?? 0),
-      categoryName: product.categoryName ?? product.CategoryName ?? existingProduct?.categoryName ?? 'Uncategorized',
+      categoryId: rawCategoryId > 0 ? rawCategoryId : this.categoryIdFromName(categoryName) ?? 0,
+      categoryName,
     };
   }
 
@@ -1513,12 +1526,36 @@ private normalizeOrderDetail(order: any): OrderDetail {
 
   private localSearch(keyword: string): Product[] {
     const normalizedKeyword = keyword.toLowerCase();
+    const selectedCategory = this.selectedCategory();
+    const selectedStock = this.selectedStock();
+    const selectedSort = this.selectedSort();
 
-    return Object.values(this.productCache()).filter((product) =>
-      [product.name, product.categoryName, product.description]
+    const matches = Object.values(this.productCache()).filter((product) => {
+      const categoryMatch = selectedCategory === 'All' || String(product.categoryId) === selectedCategory;
+      const stockMatch =
+        selectedStock === 'All' ||
+        (selectedStock === 'InStock' && product.stockQuantity > 0) ||
+        (selectedStock === 'OutOfStock' && product.stockQuantity <= 0);
+      const keywordMatch = [product.name, product.categoryName, product.description]
         .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(normalizedKeyword)),
+        .some((value) => value.toLowerCase().includes(normalizedKeyword));
+
+      return categoryMatch && stockMatch && keywordMatch;
+    });
+
+    if (selectedSort === 'price-asc') return [...matches].sort((a, b) => a.price - b.price);
+    if (selectedSort === 'price-desc') return [...matches].sort((a, b) => b.price - a.price);
+    if (selectedSort === 'name') return [...matches].sort((a, b) => a.name.localeCompare(b.name));
+
+    return matches;
+  }
+
+  private categoryIdFromName(categoryName: string): number | null {
+    const category = this.categories().find(
+      (item) => item.name.toLowerCase() === categoryName.toLowerCase(),
     );
+
+    return category?.id ?? null;
   }
 
   private defaultPaymentProviders(): PaymentProviderOption[] {
@@ -1538,13 +1575,16 @@ private normalizeOrderDetail(order: any): OrderDetail {
   }
 
   private resetProductPage(): void {
-    if (this.searchActive()) {
-      void this.searchProducts(1, false);
-      return;
-    }
-
     this.catalogPage.set(1);
     void this.loadCatalog(1);
+  }
+
+  private clearSearchState(): void {
+    this.searchKeyword.set('');
+    this.searchAppliedKeyword.set('');
+    this.searchResults.set([]);
+    this.searchTotal.set(0);
+    this.searchPage.set(1);
   }
 
   private showToast(message: string): void {

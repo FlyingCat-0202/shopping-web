@@ -71,7 +71,10 @@ public static class ProductSeedData
                 product.Description ?? "",
                 product.Price,
                 categoryName,
-                product.IsActive
+                product.IsActive,
+                product.ImageUrl,
+                product.CategoryId,
+                product.StockQuantity
             );
 
             await publishEndpoint.Publish(eventMsg);

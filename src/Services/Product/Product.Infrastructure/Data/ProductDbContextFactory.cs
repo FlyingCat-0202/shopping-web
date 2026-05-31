@@ -10,7 +10,7 @@ public class ProductDbContextFactory : IDesignTimeDbContextFactory<ProductDbCont
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__product-db")
             ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=order-db;Username=postgres;Password=0211";
+            ?? "Host=localhost;Port=5432;Database=product-db;Username=postgres;Password=0211";
 
         var options = new DbContextOptionsBuilder<ProductDbContext>()
             .UseNpgsql(connectionString, npgsql =>
