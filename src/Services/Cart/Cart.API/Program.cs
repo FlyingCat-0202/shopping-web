@@ -46,7 +46,7 @@ app.UseApiServiceDefaults();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
+app.MapApiHealthChecks();
 app.MapCartEndpoints();
 
 app.Run();

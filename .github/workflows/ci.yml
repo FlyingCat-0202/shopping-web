@@ -94,3 +94,66 @@ jobs:
 
       - name: Restore with vulnerability audit
         run: dotnet restore shopping.slnx /p:NuGetAudit=true /p:NuGetAuditLevel=high
+
+  container-build:
+    name: Container build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs:
+      - backend
+      - frontend
+      - package-audit
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api-gateway
+            project: src/Gateways/ApiGateway/ApiGateway.csproj
+            dll: ApiGateway.dll
+          - image: identity-api
+            project: src/Services/Identity/Identity.API/Identity.API.csproj
+            dll: Identity.API.dll
+          - image: product-api
+            project: src/Services/Product/Product.API/Product.API.csproj
+            dll: Product.API.dll
+          - image: cart-api
+            project: src/Services/Cart/Cart.API/Cart.API.csproj
+            dll: Cart.API.dll
+          - image: order-api
+            project: src/Services/Order/Order.API/Order.API.csproj
+            dll: Order.API.dll
+          - image: payment-api
+            project: src/Services/Payment/Payment.API/Payment.API.csproj
+            dll: Payment.API.dll
+          - image: notification-api
+            project: src/Services/Notification/Notification.API/Notification.API.csproj
+            dll: Notification.API.dll
+          - image: web-store-angular
+            frontend: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build .NET service image
+        if: ${{ matrix.frontend != true }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.dotnet-service
+          push: false
+          tags: shopping-web/${{ matrix.image }}:ci
+          build-args: |
+            PROJECT=${{ matrix.project }}
+            APP_DLL=${{ matrix.dll }}
+
+      - name: Build frontend image
+        if: ${{ matrix.frontend == true }}
+        uses: docker/build-push-action@v6
+        with:
+          context: src/Web/web-store-angular
+          file: src/Web/web-store-angular/Dockerfile
+          push: false
+          tags: shopping-web/web-store-angular:ci

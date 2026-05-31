@@ -35,7 +35,7 @@ var app = builder.Build();
 
 app.UseApiServiceDefaults();
 
-app.MapHealthChecks("/health");
+app.MapApiHealthChecks();
 app.MapReverseProxy();
 
 app.Run();

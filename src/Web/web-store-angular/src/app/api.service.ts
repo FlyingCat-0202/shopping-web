@@ -29,6 +29,12 @@ interface RequestOptions {
   retry?: boolean;
 }
 
+declare global {
+  interface Window {
+    __SHOPPING_API_CONFIG__?: Partial<ApiConfig>;
+  }
+}
+
 const defaultApi: ApiConfig = {
   identity: 'http://localhost:5000',
   product: 'http://localhost:5000',
@@ -174,7 +180,7 @@ export class ApiService {
   }
 
   private readApiConfig(): ApiConfig {
-    return { ...defaultApi };
+    return { ...defaultApi, ...window.__SHOPPING_API_CONFIG__ };
   }
 
   private readAuth(): AuthState | null {

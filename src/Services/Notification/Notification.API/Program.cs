@@ -73,7 +73,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ── Endpoints ────────────────────────────────────────────────────────────────
-app.MapHealthChecks("/health");
+app.MapApiHealthChecks();
 app.MapNotificationEndpoints();
 
 app.Run();

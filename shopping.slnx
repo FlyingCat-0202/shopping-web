@@ -50,6 +50,9 @@
   <Folder Name="/tests/Identity/">
     <Project Path="tests\Identity.ApiTests\Identity.ApiTests.csproj" />
   </Folder>
+  <Folder Name="/tests/Payment/">
+    <Project Path="tests\Payment.ApiTests\Payment.ApiTests.csproj" />
+  </Folder>
   <Folder Name="/tests/Service/">
     <Project Path="tests\Service.IntegrationTests\Service.IntegrationTests.csproj" />
   </Folder>

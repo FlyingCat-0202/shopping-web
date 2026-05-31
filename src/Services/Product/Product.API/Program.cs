@@ -130,7 +130,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
-app.MapHealthChecks("/health");
+app.MapApiHealthChecks();
 
 using (var scope = app.Services.CreateScope())
 {

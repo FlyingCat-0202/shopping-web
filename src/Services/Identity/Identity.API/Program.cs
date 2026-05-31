@@ -74,7 +74,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
-app.MapHealthChecks("/health");
+app.MapApiHealthChecks();
 
 // Đăng ký các Endpoint Đăng nhập, Đăng ký, Logout từ Module Identity
 app.MapIdentityEndpoints();

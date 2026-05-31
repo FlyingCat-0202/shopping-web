@@ -1,8 +1,14 @@
+using System.Threading.RateLimiting;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi;
@@ -26,6 +32,7 @@ public static class ServiceDefaultExtensions
         builder.Services.AddHealthChecks();
         builder.Services.AddHttpLogging();
         builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
+        builder.Services.AddApiRateLimiting(builder.Configuration);
         builder.Services.AddScalarOpenApi(builder.Environment.ApplicationName);
 
         return builder;
@@ -115,8 +122,82 @@ public static class ServiceDefaultExtensions
     {
         app.UseExceptionHandler();
         app.UseHttpLogging();
+        app.UseApiSecurityHeaders();
+        app.UseRateLimiter();
         app.UseFrontendCors();
         app.MapScalarOpenApi();
+
+        return app;
+    }
+
+    public static IEndpointRouteBuilder MapApiHealthChecks(this IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapHealthChecks("/health");
+        endpoints.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = _ => false
+        });
+        endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            ResultStatusCodes =
+            {
+                [HealthStatus.Healthy] = StatusCodes.Status200OK,
+                [HealthStatus.Degraded] = StatusCodes.Status200OK,
+                [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+            }
+        });
+
+        return endpoints;
+    }
+
+    private static IServiceCollection AddApiRateLimiting(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var permitLimit = Math.Max(1, configuration.GetValue("RateLimiting:PermitLimit", 600));
+        var windowSeconds = Math.Max(1, configuration.GetValue("RateLimiting:WindowSeconds", 60));
+        var queueLimit = Math.Max(0, configuration.GetValue("RateLimiting:QueueLimit", 0));
+
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            {
+                var partitionKey = context.Request.Path.StartsWithSegments(HealthEndpointPath)
+                    ? "health"
+                    : context.User.Identity?.IsAuthenticated == true
+                        ? context.User.Identity.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "authenticated"
+                        : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+
+                var partitionPermitLimit = partitionKey == "health"
+                    ? Math.Max(permitLimit, 10_000)
+                    : permitLimit;
+
+                return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = partitionPermitLimit,
+                    QueueLimit = queueLimit,
+                    Window = TimeSpan.FromSeconds(windowSeconds)
+                });
+            });
+        });
+
+        return services;
+    }
+
+    private static WebApplication UseApiSecurityHeaders(this WebApplication app)
+    {
+        app.Use(async (context, next) =>
+        {
+            var headers = context.Response.Headers;
+            headers.TryAdd("X-Content-Type-Options", "nosniff");
+            headers.TryAdd("X-Frame-Options", "DENY");
+            headers.TryAdd("Referrer-Policy", "no-referrer");
+            headers.TryAdd("Permissions-Policy", "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()");
+
+            await next();
+        });
 
         return app;
     }
@@ -203,10 +284,8 @@ public static class ServiceDefaultExtensions
                     return;
                 }
 
-                policy
-                    .WithOrigins("https://example.com")
-                    .AllowAnyHeader()
-                    .AllowAnyMethod();
+                throw new InvalidOperationException(
+                    "Cors:AllowedOrigins must be configured explicitly outside Development.");
             });
         });
 
