@@ -122,6 +122,10 @@ interface Chip {
 })
 export class App implements OnInit {
   private readonly api = inject(ApiService);
+  private catalogLoadVersion = 0;
+  private notificationsLoadVersion = 0;
+  private ordersLoadVersion = 0;
+  private searchLoadVersion = 0;
   private readonly priceFormatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -324,6 +328,7 @@ export class App implements OnInit {
   }
 
   async loadCatalog(page = this.catalogPage()): Promise<void> {
+    const loadVersion = ++this.catalogLoadVersion;
     this.connectionState.set('loading');
 
     try {
@@ -344,6 +349,8 @@ export class App implements OnInit {
       }
 
       const payload = await this.api.request<any>('product', `/api/products/?${params.toString()}`);
+      if (loadVersion !== this.catalogLoadVersion) return;
+
       const products = payload.products ?? payload.Products ?? [];
       const categories = payload.categories ?? payload.Categories ?? [];
       const normalizedProducts = products.map((product: any, index: number) => this.normalizeProduct(product, index));
@@ -365,6 +372,8 @@ export class App implements OnInit {
         await this.searchProducts(this.searchPage(), false);
       }
     } catch (error) {
+      if (loadVersion !== this.catalogLoadVersion) return;
+
       this.products.set([]);
       this.catalogTotal.set(0);
       this.connectionState.set('offline');
@@ -393,6 +402,8 @@ export class App implements OnInit {
   }
 
   async loadOrders(): Promise<void> {
+    const loadVersion = ++this.ordersLoadVersion;
+
     if (!this.auth()) {
       this.orders.set([]);
       this.payments.set({});
@@ -408,6 +419,8 @@ export class App implements OnInit {
 
     try {
       const payload = await this.api.request<any>('order', path, { auth: true });
+      if (loadVersion !== this.ordersLoadVersion) return;
+
       const orders = payload.items ?? payload.Items ?? [];
       const normalizedOrders = orders.map((order: any) => this.normalizeOrder(order));
       this.orders.set(normalizedOrders);
@@ -417,6 +430,8 @@ export class App implements OnInit {
         this.isAdmin() ? this.loadAdminPayments() : Promise.resolve(),
       ]);
     } catch (error) {
+      if (loadVersion !== this.ordersLoadVersion) return;
+
       this.orders.set([]);
       this.payments.set({});
       this.adminPayments.set([]);
@@ -469,6 +484,8 @@ export class App implements OnInit {
 
 
   async loadNotifications(showErrors = true): Promise<void> {
+    const loadVersion = ++this.notificationsLoadVersion;
+
     if (!this.auth()) {
       this.notifications.set([]);
       this.unreadNotificationCount.set(0);
@@ -484,15 +501,21 @@ export class App implements OnInit {
         unreadOnly: String(this.notificationUnreadOnly()),
       });
       const payload = await this.api.request<any>('notification', `/api/notifications/?${params.toString()}`, { auth: true });
+      if (loadVersion !== this.notificationsLoadVersion) return;
+
       const items = payload.items ?? payload.Items ?? [];
       const notifications = items.map((item: any) => this.normalizeNotification(item));
 
       this.notifications.set(notifications);
       this.unreadNotificationCount.set(Number(payload.unreadCount ?? payload.UnreadCount ?? this.unreadNotificationCount()));
     } catch (error) {
+      if (loadVersion !== this.notificationsLoadVersion) return;
+
       this.notifications.set([]);
       if (showErrors) this.showToast(this.api.messageFromError(error));
     } finally {
+      if (loadVersion !== this.notificationsLoadVersion) return;
+
       this.notificationsLoading.set(false);
     }
   }
@@ -578,6 +601,7 @@ export class App implements OnInit {
   }
 
   async searchProducts(page = 1, showEmptyToast = true): Promise<void> {
+    const loadVersion = ++this.searchLoadVersion;
     const keyword = this.searchKeyword().trim();
     const nextPage = Math.max(1, page);
 
@@ -586,7 +610,6 @@ export class App implements OnInit {
       return;
     }
 
-    if (this.searchLoading()) return;
     this.searchLoading.set(true);
 
     try {
@@ -609,6 +632,8 @@ export class App implements OnInit {
       }
 
       const payload = await this.api.request<any>('product', `/api/products/search?${params.toString()}`);
+      if (loadVersion !== this.searchLoadVersion) return;
+
       const items = payload.items ?? payload.Items ?? [];
       const products = items.map((product: any, index: number) => this.normalizeSearchProduct(product, index));
 
@@ -622,6 +647,8 @@ export class App implements OnInit {
         this.showToast('No products found in search.');
       }
     } catch (error) {
+      if (loadVersion !== this.searchLoadVersion) return;
+
       const fallbackMatches = this.localSearch(keyword);
       const start = (nextPage - 1) * this.productPageSize();
       const fallbackProducts = fallbackMatches.slice(start, start + this.productPageSize());
@@ -633,6 +660,8 @@ export class App implements OnInit {
         this.showToast(`Search service unavailable. No local matches found. ${this.api.messageFromError(error)}`);
       }
     } finally {
+      if (loadVersion !== this.searchLoadVersion) return;
+
       this.searchLoading.set(false);
     }
   }
@@ -1617,11 +1646,13 @@ private normalizeOrderDetail(order: any): OrderDetail {
   }
 
   private clearSearchState(): void {
+    this.searchLoadVersion++;
     this.searchKeyword.set('');
     this.searchAppliedKeyword.set('');
     this.searchResults.set([]);
     this.searchTotal.set(0);
     this.searchPage.set(1);
+    this.searchLoading.set(false);
   }
 
   private showToast(message: string): void {

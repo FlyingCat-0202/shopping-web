@@ -19,32 +19,16 @@ internal sealed class ProductDatabaseSearch(ProductDbContext db) : IProductDatab
             .AsNoTracking()
             .Where(p => p.IsActive);
 
-        query = ProductSearchFilters.ApplyProductFilters(query, search.CategoryId, search.Stock);
-
-        if (!string.IsNullOrWhiteSpace(search.Keyword))
-        {
-            var pattern = $"%{search.Keyword}%";
-            query = query.Where(p =>
-                EF.Functions.ILike(p.Name, pattern) ||
-                (p.Description != null && EF.Functions.ILike(p.Description, pattern)) ||
-                EF.Functions.ILike(p.Category.Name, pattern));
-        }
+        query = ProductQueryPolicy.ApplyFilters(query, search.CategoryId, search.Stock);
+        query = ProductQueryPolicy.ApplyKeyword(query, search.Keyword);
 
         var totalItems = await query.CountAsync(cancellationToken);
-        var items = await ProductSearchFilters.ApplyProductSort(query, search.Sort)
-            .Skip((search.Page - 1) * search.PageSize)
-            .Take(search.PageSize)
-            .Select(p => new ProductResponse(
-                p.Id,
-                p.Name,
-                p.Price,
-                p.StockQuantity,
-                p.Description,
-                p.ImageUrl,
-                p.CategoryId,
-                p.Category.Name))
+        var items = await ProductQueryPolicy.ApplySort(query, search.Sort)
+            .Skip((int)search.Page.Offset)
+            .Take(search.Page.PageSize)
+            .Select(ProductQueryPolicy.ProductResponseProjection)
             .ToListAsync(cancellationToken);
 
-        return new ProductSearchPageResponse(items, totalItems, search.Page);
+        return new ProductSearchPageResponse(items, totalItems, search.Page.Page, search.Page.PageSize);
     }
 }

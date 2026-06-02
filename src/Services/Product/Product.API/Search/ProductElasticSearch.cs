@@ -29,20 +29,20 @@ internal sealed class ProductElasticSearch(
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, options.Value.ElasticTimeoutSeconds)));
 
-        var from = (query.Page - 1) * query.PageSize;
+        var from = (int)query.Page.Offset;
         var queryVector = await aiEmbeddingService.GetVectorAsync(query.Keyword, timeoutCts.Token);
         var normalizedQueryVector = ElasticProductIndex.NormalizeVector(queryVector, logger, $"search keyword '{query.Keyword}'");
         var useVectorSearch = normalizedQueryVector is not null;
-        var vectorResultCount = Math.Min(Math.Max(from + query.PageSize, query.PageSize), 1000);
+        var vectorResultCount = Math.Min(Math.Max(from + query.Page.PageSize, query.Page.PageSize), 1000);
         var vectorCandidateCount = Math.Min(Math.Max(vectorResultCount * 5, 100), 10_000);
-        var filters = BuildElasticFilters(query.CategoryName, query.StockStatus);
+        var filters = BuildElasticFilters(query.CategoryId, query.StockStatus);
 
         var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s =>
         {
             var descriptor = s
                 .Indices(ElasticProductIndex.Name)
                 .From(from)
-                .Size(query.PageSize)
+                .Size(query.Page.PageSize)
                 .Query(q => q.Bool(b =>
                 {
                     if (useVectorSearch)
@@ -109,11 +109,11 @@ internal sealed class ProductElasticSearch(
                     doc.CategoryName))
             .ToList();
 
-        return new ProductSearchPageResponse(items, searchResponse.Total, query.Page);
+        return new ProductSearchPageResponse(items, searchResponse.Total, query.Page.Page, query.Page.PageSize);
     }
 
     private static Action<QueryDescriptor<ProductEsDocument>>[] BuildElasticFilters(
-        string? categoryName,
+        int? categoryId,
         string? stockStatus)
     {
         var filters = new List<Action<QueryDescriptor<ProductEsDocument>>>
@@ -121,8 +121,8 @@ internal sealed class ProductElasticSearch(
             f => f.Term(t => t.Field(p => p.IsActive).Value(true))
         };
 
-        if (!string.IsNullOrWhiteSpace(categoryName))
-            filters.Add(f => f.Term(t => t.Field(p => p.CategoryName).Value(categoryName)));
+        if (categoryId is > 0)
+            filters.Add(f => f.Term(t => t.Field(p => p.CategoryId).Value(categoryId.Value)));
 
         if (!string.IsNullOrWhiteSpace(stockStatus))
             filters.Add(f => f.Term(t => t.Field(p => p.StockStatus).Value(stockStatus)));
@@ -134,16 +134,22 @@ internal sealed class ProductElasticSearch(
         SearchRequestDescriptor<ProductEsDocument> descriptor,
         string? sort)
     {
-        switch (sort?.Trim().ToLowerInvariant())
+        switch (sort)
         {
-            case "price-asc":
-                descriptor.Sort(s => s.Field(f => f.Field(p => p.Price).Order(SortOrder.Asc)));
+            case ProductQueryPolicy.SortPriceAsc:
+                descriptor.Sort(s => s
+                    .Field(f => f.Field(p => p.Price).Order(SortOrder.Asc))
+                    .Field(f => f.Field(p => p.Id).Order(SortOrder.Asc)));
                 break;
-            case "price-desc":
-                descriptor.Sort(s => s.Field(f => f.Field(p => p.Price).Order(SortOrder.Desc)));
+            case ProductQueryPolicy.SortPriceDesc:
+                descriptor.Sort(s => s
+                    .Field(f => f.Field(p => p.Price).Order(SortOrder.Desc))
+                    .Field(f => f.Field(p => p.Id).Order(SortOrder.Asc)));
                 break;
-            case "name":
-                descriptor.Sort(s => s.Field(f => f.Field(p => p.NameSort).Order(SortOrder.Asc)));
+            case ProductQueryPolicy.SortName:
+                descriptor.Sort(s => s
+                    .Field(f => f.Field(p => p.NameSort).Order(SortOrder.Asc))
+                    .Field(f => f.Field(p => p.Id).Order(SortOrder.Asc)));
                 break;
         }
     }

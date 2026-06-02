@@ -8,6 +8,7 @@ using Product.API.Endpoints;
 using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
+using Product.API.Products;
 using Product.API.Search;
 using Product.API.Validators;
 using Product.Domain.Entities;
@@ -32,9 +33,11 @@ builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
 builder.Services.AddScoped<IStockReservationService, StockReservationService>();
 builder.Services.AddScoped<IProductElasticSearch, ProductElasticSearch>();
 builder.Services.AddScoped<IProductDatabaseSearch, ProductDatabaseSearch>();
-builder.Services.AddScoped<IProductSearchCategoryResolver, ProductSearchCategoryResolver>();
 builder.Services.AddScoped<IProductSearchService, ProductSearchService>();
 builder.Services.AddScoped<IProductCatalogService, ProductCatalogService>();
+builder.Services.AddScoped<IProductReadService, ProductReadService>();
+builder.Services.AddScoped<IProductAdminCommandService, ProductAdminCommandService>();
+builder.Services.AddScoped<IProductMutationService, ProductMutationService>();
 builder.Services.Configure<ProductSearchOptions>(
     builder.Configuration.GetSection(ProductSearchOptions.SectionName));
 builder.Services.Configure<ProductCatalogOptions>(

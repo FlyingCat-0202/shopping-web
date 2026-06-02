@@ -1,4 +1,5 @@
 using Product.API.Dtos;
+using Product.API.Search;
 
 namespace Product.API.Catalog;
 
@@ -14,5 +15,5 @@ internal sealed record ProductCatalogResult(
     public static ProductCatalogResult LimitExceeded(int maxOffsetItems)
         => new(
             null,
-            $"Catalog chỉ hỗ trợ phân trang offset trong {maxOffsetItems:N0} sản phẩm đầu. Hãy dùng search/filter để thu hẹp kết quả.");
+            ProductQueryLimit.Create(maxOffsetItems).ErrorMessage);
 }

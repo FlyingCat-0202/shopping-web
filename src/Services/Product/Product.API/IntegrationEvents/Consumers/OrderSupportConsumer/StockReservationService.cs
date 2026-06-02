@@ -8,6 +8,11 @@ namespace Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 
 public interface IStockReservationService
 {
+    Task<StockReservationResult> ReserveStockAsync(
+        Guid orderId,
+        IEnumerable<OrderItemInfo> items,
+        CancellationToken cancellationToken);
+
     Task<int> ReleaseReservedStockAsync(
         Guid orderId,
         IEnumerable<OrderItemInfo> items,
@@ -17,6 +22,60 @@ public interface IStockReservationService
 
 public class StockReservationService(ProductDbContext dbContext) : IStockReservationService
 {
+    public async Task<StockReservationResult> ReserveStockAsync(
+        Guid orderId,
+        IEnumerable<OrderItemInfo> items,
+        CancellationToken cancellationToken)
+    {
+        var requestedItems = BuildRequestedItems(items);
+        if (requestedItems.Count == 0)
+            return StockReservationResult.Failed("Đơn hàng không có sản phẩm.");
+
+        if (requestedItems.Any(x => x.Quantity <= 0))
+            return StockReservationResult.Failed("Số lượng sản phẩm không hợp lệ.");
+
+        var existingReservations = await dbContext.StockReservations
+            .Where(r => r.OrderId == orderId)
+            .ToListAsync(cancellationToken);
+
+        if (existingReservations.Count > 0)
+            return ResolveExistingReservation(orderId, requestedItems, existingReservations);
+
+        var productIds = requestedItems.Select(x => x.ProductId).ToList();
+        var products = await dbContext.Products
+            .Where(p => productIds.Contains(p.Id) && p.IsActive)
+            .ToListAsync(cancellationToken);
+
+        if (products.Count != productIds.Count)
+            return StockReservationResult.Failed("Sản phẩm không tồn tại hoặc đã ngừng kinh doanh.");
+
+        var productById = products.ToDictionary(p => p.Id);
+        foreach (var item in requestedItems)
+        {
+            var product = productById[item.ProductId];
+            if (item.Quantity > product.StockQuantity)
+                return StockReservationResult.Failed($"Sản phẩm {product.Id} không đủ hàng.");
+        }
+
+        foreach (var item in requestedItems)
+        {
+            var product = productById[item.ProductId];
+            product.StockQuantity -= item.Quantity;
+
+            dbContext.StockReservations.Add(
+                StockReservation.Create(
+                    orderId,
+                    item.ProductId,
+                    product.Name,
+                    product.ImageUrl,
+                    item.Quantity,
+                    product.Price));
+        }
+
+        return StockReservationResult.Reserved(
+            requestedItems.Select(i => ToValidatedOrderItem(i, productById[i.ProductId])).ToList());
+    }
+
     public async Task<int> ReleaseReservedStockAsync(
         Guid orderId,
         IEnumerable<OrderItemInfo> items,
@@ -40,6 +99,60 @@ public class StockReservationService(ProductDbContext dbContext) : IStockReserva
 
         return releasableReservations.Count;
     }
+
+    private static List<RequestedStockItem> BuildRequestedItems(IEnumerable<OrderItemInfo> items)
+        => items
+            .GroupBy(x => x.ProductId)
+            .Select(g => new RequestedStockItem(g.Key, g.Sum(x => x.Quantity)))
+            .ToList();
+
+    private static StockReservationResult ResolveExistingReservation(
+        Guid orderId,
+        IReadOnlyCollection<RequestedStockItem> requestedItems,
+        IReadOnlyCollection<StockReservation> reservations)
+    {
+        if (!MatchesExistingReservations(requestedItems, reservations))
+            throw new InvalidOperationException($"Stock reservation data không khớp với Order {orderId}.");
+
+        if (reservations.All(r => r.Status == StockReservationStatus.Reserved))
+            return StockReservationResult.Reserved(reservations.Select(ToValidatedOrderItem).ToList());
+
+        if (reservations.All(r => r.Status == StockReservationStatus.Released))
+            return StockReservationResult.Ignored();
+
+        throw new InvalidOperationException($"Stock reservation status không hợp lệ cho Order {orderId}.");
+    }
+
+    private static bool MatchesExistingReservations(
+        IReadOnlyCollection<RequestedStockItem> requestedItems,
+        IReadOnlyCollection<StockReservation> reservations)
+    {
+        var expectedItems = requestedItems.ToDictionary(x => x.ProductId, x => x.Quantity);
+        var existingItems = reservations.ToDictionary(x => x.ProductId, x => x.Quantity);
+
+        return expectedItems.Count == existingItems.Count &&
+               expectedItems.All(x => existingItems.TryGetValue(x.Key, out var quantity) && quantity == x.Value);
+    }
+
+    private static ValidatedOrderItem ToValidatedOrderItem(RequestedStockItem item, ProductEntity product)
+        => new()
+        {
+            ProductId = item.ProductId,
+            ProductName = product.Name,
+            ProductImageUrl = product.ImageUrl,
+            Quantity = item.Quantity,
+            UnitPrice = product.Price
+        };
+
+    private static ValidatedOrderItem ToValidatedOrderItem(StockReservation reservation)
+        => new()
+        {
+            ProductId = reservation.ProductId,
+            ProductName = reservation.ProductName,
+            ProductImageUrl = reservation.ProductImageUrl,
+            Quantity = reservation.Quantity,
+            UnitPrice = reservation.UnitPrice
+        };
 
     private static List<Guid> GetDistinctProductIds(IEnumerable<OrderItemInfo> items)
         => items.Select(x => x.ProductId).Distinct().ToList();
@@ -119,4 +232,28 @@ public class StockReservationService(ProductDbContext dbContext) : IStockReserva
             reservation.Release(releaseReason);
         }
     }
+
+    private sealed record RequestedStockItem(Guid ProductId, int Quantity);
+}
+
+public enum StockReservationResultStatus
+{
+    Reserved,
+    Failed,
+    Ignored
+}
+
+public sealed record StockReservationResult(
+    StockReservationResultStatus Status,
+    IReadOnlyList<ValidatedOrderItem> Items,
+    string? FailureReason)
+{
+    public static StockReservationResult Reserved(IReadOnlyList<ValidatedOrderItem> items)
+        => new(StockReservationResultStatus.Reserved, items, null);
+
+    public static StockReservationResult Failed(string reason)
+        => new(StockReservationResultStatus.Failed, [], reason);
+
+    public static StockReservationResult Ignored()
+        => new(StockReservationResultStatus.Ignored, [], null);
 }

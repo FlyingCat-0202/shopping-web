@@ -5,7 +5,10 @@ internal sealed class ProductSearchOptions
     public const string SectionName = "ProductSearch";
 
     public string Mode { get; init; } = ProductSearchMode.Hybrid;
+    public int MaxPageSize { get; init; } = 50;
+    public int MaxOffsetItems { get; init; } = 10_000;
     public int ElasticTimeoutSeconds { get; init; } = 4;
+    public bool FallbackToDatabaseWhenElasticReturnsNoResults { get; init; } = false;
     public bool ConfigureElasticIndexOnStartup { get; init; } = true;
     public bool RebuildElasticIndexWhenCreated { get; init; } = true;
 
@@ -25,10 +28,8 @@ internal static class ProductSearchMode
 
 internal sealed record ProductSearchQuery(
     string Keyword,
-    int Page,
-    int PageSize,
+    ProductQueryPage Page,
     int? CategoryId,
-    string? CategoryName,
-    string? Stock,
+    string Stock,
     string? StockStatus,
-    string? Sort);
+    string Sort);

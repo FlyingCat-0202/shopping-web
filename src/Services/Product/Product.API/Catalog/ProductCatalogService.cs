@@ -15,32 +15,28 @@ internal sealed class ProductCatalogService(
         ProductCatalogRequest request,
         CancellationToken cancellationToken)
     {
-        var page = Math.Max(request.Page, 1);
-        var pageSize = Math.Clamp(request.PageSize, 1, options.Value.EffectiveMaxPageSize);
-        var offset = ((long)page - 1) * pageSize;
+        var page = ProductQueryPage.Normalize(
+            request.Page,
+            request.PageSize,
+            options.Value.EffectiveMaxPageSize);
+        var limit = ProductQueryLimit.Create(options.Value.EffectiveMaxOffsetItems);
 
-        if (offset >= options.Value.EffectiveMaxOffsetItems)
+        if (!limit.Allows(page))
             return ProductCatalogResult.LimitExceeded(options.Value.EffectiveMaxOffsetItems);
 
         var query = db.Products
             .AsNoTracking()
             .Where(p => p.IsActive);
 
-        query = ProductSearchFilters.ApplyProductFilters(query, request.CategoryId, request.Stock);
+        var stock = ProductQueryPolicy.NormalizeStock(request.Stock);
+        var sort = ProductQueryPolicy.NormalizeSort(request.Sort);
+        query = ProductQueryPolicy.ApplyFilters(query, request.CategoryId, stock);
 
         var totalItems = await query.CountAsync(cancellationToken);
-        var products = await ProductSearchFilters.ApplyProductSort(query, request.Sort)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(p => new ProductResponse(
-                p.Id,
-                p.Name,
-                p.Price,
-                p.StockQuantity,
-                p.Description,
-                p.ImageUrl,
-                p.CategoryId,
-                p.Category.Name))
+        var products = await ProductQueryPolicy.ApplySort(query, sort)
+            .Skip((int)page.Offset)
+            .Take(page.PageSize)
+            .Select(ProductQueryPolicy.ProductResponseProjection)
             .ToListAsync(cancellationToken);
 
         var categories = request.IncludeCategories
@@ -55,7 +51,7 @@ internal sealed class ProductCatalogService(
             products,
             categories,
             totalItems,
-            page,
-            pageSize));
+            page.Page,
+            page.PageSize));
     }
 }
