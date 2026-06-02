@@ -37,11 +37,13 @@ public class ProductElasticDocumentTests
     [Fact]
     public void ProductElasticIndexDropsVectorsWithWrongDimensions()
     {
-        var valid = new float[ElasticProductIndex.EmbeddingDimensions];
+        var valid = Enumerable.Repeat(0.1f, ElasticProductIndex.EmbeddingDimensions).ToArray();
         var invalid = new float[12];
+        var zeroMagnitude = new float[ElasticProductIndex.EmbeddingDimensions];
 
         ElasticProductIndex.NormalizeVector(valid, NullLogger.Instance, "valid vector").ShouldBeSameAs(valid);
         ElasticProductIndex.NormalizeVector(invalid, NullLogger.Instance, "invalid vector").ShouldBeNull();
+        ElasticProductIndex.NormalizeVector(zeroMagnitude, NullLogger.Instance, "zero vector").ShouldBeNull();
         ElasticProductIndex.StockStatus(0).ShouldBe(ElasticProductIndex.OutOfStock);
     }
 }

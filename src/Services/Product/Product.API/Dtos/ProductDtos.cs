@@ -33,6 +33,7 @@ public sealed class ProductCatalogRequest
     public int? CategoryId { get; init; }
     public string? Stock { get; init; }
     public string? Sort { get; init; }
+    public bool IncludeCategories { get; init; } = true;
 }
 
 public record ProductCategoryPageResponse(

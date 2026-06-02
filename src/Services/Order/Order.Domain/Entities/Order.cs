@@ -55,6 +55,7 @@ public class Order
             _items.Add(new OrderDetail(Id, productId, unitPrice, quantity));
     }
 
+    // USE FOR TESTING PURPOSES ONLY
     public void MarkStockReserved(Dictionary<Guid, decimal> prices)
         => MarkStockReserved(prices.Select(x =>
             new OrderItemSnapshot(x.Key, $"Product {x.Key}", null, x.Value)));
@@ -69,7 +70,8 @@ public class Order
         foreach (var item in _items)
         {
             if (!snapshots.TryGetValue(item.ProductId, out var snapshot))
-                throw new InvalidOperationException($"Thiếu giá đã xác thực cho sản phẩm {item.ProductId}.");
+                throw new InvalidOperationException(
+                    $"Danh sách sản phẩm đã giữ kho không chứa sản phẩm {item.ProductId} trong đơn hàng.");
 
             item.UpdateUnitPrice(snapshot.UnitPrice);
             item.UpdateProductSnapshot(snapshot.ProductName, snapshot.ProductImageUrl);

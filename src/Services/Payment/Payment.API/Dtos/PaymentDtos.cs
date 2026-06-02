@@ -28,6 +28,8 @@ public record PaymentResponse(
     DateTime CreatedAt,
     DateTime? CompletedAt);
 
+public record PaymentsByOrderIdsRequest(IReadOnlyList<Guid> OrderIds);
+
 public record AdminPaymentResponse(
     Guid Id,
     Guid OrderId,

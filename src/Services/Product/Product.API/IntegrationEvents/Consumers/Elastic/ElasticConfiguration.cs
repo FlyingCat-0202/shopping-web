@@ -8,13 +8,16 @@ namespace Product.API.IntegrationEvents.Consumers.Elastic;
 
 public static class ElasticConfigurator
 {
-    public static async Task<bool> SetupIndexAsync(ElasticsearchClient elasticClient, ILogger<Program> logger)
+    public static async Task<bool> SetupIndexAsync(
+        ElasticsearchClient elasticClient,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
     {
         const string indexName = ElasticProductIndex.VersionedName;
 
         try
         {
-            var existsResponse = await elasticClient.Indices.ExistsAsync(indexName);
+            var existsResponse = await elasticClient.Indices.ExistsAsync(indexName, cancellationToken);
             var created = false;
 
             if (!existsResponse.Exists)
@@ -40,7 +43,7 @@ public static class ElasticConfigurator
                             )
                         )
                     )
-                );
+                , cancellationToken);
 
                 if (!createResponse.IsValidResponse)
                 {
@@ -56,7 +59,7 @@ public static class ElasticConfigurator
                 created = true;
             }
 
-            await PointAliasToVersionedIndexAsync(elasticClient, logger);
+            await PointAliasToVersionedIndexAsync(elasticClient, logger, cancellationToken);
             return created;
         }
         catch (Exception ex)
@@ -70,7 +73,7 @@ public static class ElasticConfigurator
         ProductDbContext db,
         ElasticsearchClient elasticClient,
         IAiEmbeddingService aiEmbeddingService,
-        ILogger<Program> logger,
+        ILogger logger,
         CancellationToken cancellationToken = default)
     {
         const int batchSize = 100;
@@ -101,7 +104,9 @@ public static class ElasticConfigurator
             if (products.Count == 0)
                 break;
 
-            var vectors = await aiEmbeddingService.GetVectorsAsync(products.Select(p => p.Name).ToArray());
+            var vectors = await aiEmbeddingService.GetVectorsAsync(
+                products.Select(p => p.Name).ToArray(),
+                cancellationToken);
             var documents = products.Select((product, index) => new ProductEsDocument(
                 Id: product.Id,
                 Name: product.Name,
@@ -138,11 +143,13 @@ public static class ElasticConfigurator
 
     private static async Task PointAliasToVersionedIndexAsync(
         ElasticsearchClient elasticClient,
-        ILogger<Program> logger)
+        ILogger logger,
+        CancellationToken cancellationToken = default)
     {
         var deleteAliasResponse = await elasticClient.Indices.DeleteAliasAsync(
             "products-*",
-            ElasticProductIndex.Name);
+            ElasticProductIndex.Name,
+            cancellationToken);
 
         if (!deleteAliasResponse.IsValidResponse &&
             deleteAliasResponse.ApiCallDetails.HttpStatusCode is not 404)
@@ -155,7 +162,8 @@ public static class ElasticConfigurator
 
         var putAliasResponse = await elasticClient.Indices.PutAliasAsync(
             ElasticProductIndex.VersionedName,
-            ElasticProductIndex.Name);
+            ElasticProductIndex.Name,
+            cancellationToken);
 
         if (!putAliasResponse.IsValidResponse)
         {

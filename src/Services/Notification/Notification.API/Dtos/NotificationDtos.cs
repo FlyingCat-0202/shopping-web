@@ -4,7 +4,8 @@ public record NotificationPagedResult<T>(
     IReadOnlyList<T> Items,
     int TotalCount,
     int PageIndex,
-    int PageSize);
+    int PageSize,
+    int UnreadCount = 0);
 
 public record NotificationResponse(
     Guid Id,

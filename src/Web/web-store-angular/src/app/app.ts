@@ -3,6 +3,9 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { ApiConfig, ApiService, AuthState } from './api.service';
 
+const PRODUCT_PAGE_SIZE = 12;
+const MAX_OFFSET_PAGINATION_ITEMS = 10_000;
+
 interface Product {
   id: string;
   name: string;
@@ -34,6 +37,7 @@ interface OrderSummary {
   customerId?: string;
   orderDate?: string;
   totalAmount: number;
+  paymentMethod: string;
   status: string;
   paymentStatus: string;
   canCancel: boolean;
@@ -44,7 +48,6 @@ interface OrderDetail extends OrderSummary {
   receiverName: string;
   phoneNumber: string;
   shippingAddress: string;
-  paymentMethod: string;
   items: OrderDetailItem[];
   timeline: OrderTimelineItem[];
 }
@@ -224,8 +227,10 @@ export class App implements OnInit {
 
   readonly productTotal = computed(() => (this.searchActive() ? this.searchTotal() : this.catalogTotal()));
   readonly productPage = computed(() => (this.searchActive() ? this.searchPage() : this.catalogPage()));
-  readonly productPageSize = computed(() => 12);
-  readonly productTotalPages = computed(() => Math.max(1, Math.ceil(this.productTotal() / this.productPageSize())));
+  readonly productPageSize = computed(() => PRODUCT_PAGE_SIZE);
+  readonly productTotalPages = computed(() =>
+    Math.max(1, Math.ceil(Math.min(this.productTotal(), MAX_OFFSET_PAGINATION_ITEMS) / this.productPageSize())),
+  );
   readonly productRangeStart = computed(() =>
     this.productTotal() === 0 ? 0 : (this.productPage() - 1) * this.productPageSize() + 1,
   );
@@ -309,11 +314,13 @@ export class App implements OnInit {
   };
 
   async ngOnInit(): Promise<void> {
-    await this.loadCatalog();
-    await this.loadPaymentProviders();
-    await this.loadCart();
-    await this.loadOrders();
-    await this.loadUnreadNotificationCount();
+    await Promise.all([
+      this.loadCatalog(),
+      this.loadPaymentProviders(),
+      this.loadCart(),
+      this.loadOrders(),
+      this.loadUnreadNotificationCount(),
+    ]);
   }
 
   async loadCatalog(page = this.catalogPage()): Promise<void> {
@@ -325,6 +332,7 @@ export class App implements OnInit {
         Page: String(nextPage),
         PageSize: String(this.productPageSize()),
         Sort: this.selectedSort(),
+        IncludeCategories: String(this.categories().length === 0),
       });
 
       if (this.selectedCategory() !== 'All') {
@@ -342,7 +350,9 @@ export class App implements OnInit {
 
       this.products.set(normalizedProducts);
       this.cacheProducts(normalizedProducts);
-      this.categories.set(categories.map((category: any) => this.normalizeCategory(category)));
+      if (categories.length > 0) {
+        this.categories.set(categories.map((category: any) => this.normalizeCategory(category)));
+      }
       this.catalogTotal.set(Number(payload.totalItems ?? payload.TotalItems ?? normalizedProducts.length));
       this.catalogPage.set(Number(payload.currentPage ?? payload.CurrentPage ?? nextPage));
       this.connectionState.set('live');
@@ -357,7 +367,6 @@ export class App implements OnInit {
     } catch (error) {
       this.products.set([]);
       this.catalogTotal.set(0);
-      this.categories.set([]);
       this.connectionState.set('offline');
       this.showToast(this.api.messageFromError(error));
     }
@@ -402,9 +411,11 @@ export class App implements OnInit {
       const orders = payload.items ?? payload.Items ?? [];
       const normalizedOrders = orders.map((order: any) => this.normalizeOrder(order));
       this.orders.set(normalizedOrders);
-      await this.loadPaymentsForOrders(normalizedOrders);
-      await this.loadUnreadNotificationCount();
-      if (this.isAdmin()) await this.loadAdminPayments();
+      await Promise.all([
+        this.loadPaymentsForOrders(normalizedOrders),
+        this.loadUnreadNotificationCount(),
+        this.isAdmin() ? this.loadAdminPayments() : Promise.resolve(),
+      ]);
     } catch (error) {
       this.orders.set([]);
       this.payments.set({});
@@ -477,7 +488,7 @@ export class App implements OnInit {
       const notifications = items.map((item: any) => this.normalizeNotification(item));
 
       this.notifications.set(notifications);
-      await this.loadUnreadNotificationCount();
+      this.unreadNotificationCount.set(Number(payload.unreadCount ?? payload.UnreadCount ?? this.unreadNotificationCount()));
     } catch (error) {
       this.notifications.set([]);
       if (showErrors) this.showToast(this.api.messageFromError(error));
@@ -1314,6 +1325,7 @@ export class App implements OnInit {
       customerId: order.customerId ?? order.CustomerId,
       orderDate: order.orderDate ?? order.OrderDate,
       totalAmount: Number(order.totalAmount ?? order.TotalAmount ?? 0),
+      paymentMethod: order.paymentMethod ?? order.PaymentMethod ?? '',
       status: order.status ?? order.Status ?? 'Unknown',
       paymentStatus: order.paymentStatus ?? order.PaymentStatus ?? 'Unknown',
       canCancel: Boolean(order.canCancel ?? order.CanCancel),
@@ -1426,16 +1438,17 @@ private normalizeOrderDetail(order: any): OrderDetail {
   }
 
   private async loadPaymentsForOrders(orders: OrderSummary[]): Promise<void> {
-    const ordersToLoad = this.isAdmin()
+    const ordersToLoad = (this.isAdmin()
       ? orders.filter((order) => order.customerId?.toLowerCase() === this.currentUserId())
-      : orders;
+      : orders)
+      .filter((order) => this.usesOnlinePayment(order));
 
     if (ordersToLoad.length === 0) {
       this.payments.set({});
       return;
     }
 
-    const payments = await Promise.all(ordersToLoad.map((order) => this.fetchPaymentForOrder(order.id)));
+    const payments = await this.fetchPaymentsForOrders(ordersToLoad.map((order) => order.id));
     const byOrderId = payments
       .filter((payment): payment is PaymentSummary => Boolean(payment))
       .reduce<Record<string, PaymentSummary>>((current, payment) => {
@@ -1449,6 +1462,8 @@ private normalizeOrderDetail(order: any): OrderDetail {
   private async ensurePaymentForOrder(order: OrderSummary): Promise<PaymentSummary | null> {
     const cachedPayment = this.paymentFor(order);
     if (cachedPayment) return cachedPayment;
+
+    if (!this.usesOnlinePayment(order)) return null;
 
     const payment = await this.fetchPaymentForOrder(order.id);
 
@@ -1469,6 +1484,28 @@ private normalizeOrderDetail(order: any): OrderDetail {
     } catch {
       return null;
     }
+  }
+
+  private async fetchPaymentsForOrders(orderIds: string[]): Promise<PaymentSummary[]> {
+    const uniqueOrderIds = Array.from(new Set(orderIds.filter(Boolean)));
+    if (uniqueOrderIds.length === 0) return [];
+
+    try {
+      const response = await this.api.request<any[]>('payment', '/api/payment/orders/query', {
+        method: 'POST',
+        auth: true,
+        body: { orderIds: uniqueOrderIds },
+      });
+
+      return response.map((payment: any) => this.normalizePayment(payment));
+    } catch {
+      const payments = await Promise.all(uniqueOrderIds.map((orderId) => this.fetchPaymentForOrder(orderId)));
+      return payments.filter((payment): payment is PaymentSummary => Boolean(payment));
+    }
+  }
+
+  private usesOnlinePayment(order: OrderSummary): boolean {
+    return order.paymentMethod.toUpperCase() !== 'COD';
   }
 
   private async ensureProductsLoaded(productIds: string[]): Promise<void> {

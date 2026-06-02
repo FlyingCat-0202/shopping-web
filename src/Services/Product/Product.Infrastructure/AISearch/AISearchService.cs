@@ -17,7 +17,7 @@ public class GeminiEmbeddingService : IAiEmbeddingService
             ?? throw new ArgumentNullException("Gemini:ApiKey is missing");
     }
 
-    public async Task<float[]> GetVectorAsync(string text)
+    public async Task<float[]> GetVectorAsync(string text, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(text))
             return Array.Empty<float>();
@@ -30,24 +30,24 @@ public class GeminiEmbeddingService : IAiEmbeddingService
             content = new { parts = new[] { new { text = text } } }
         };
 
-        var response = await _httpClient.PostAsJsonAsync(requestUrl, payload);
+        var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadFromJsonAsync<GeminiEmbeddingResponse>();
+        var result = await response.Content.ReadFromJsonAsync<GeminiEmbeddingResponse>(cancellationToken);
         return result?.Embedding?.Values ?? throw new Exception("Không thể parse vector từ Gemini.");
     }
 
     // Gemini không có batch endpoint nên fallback: gọi song song, giới hạn 5 request đồng thời
     // để tránh hit rate-limit của Gemini API.
-    public async Task<float[]?[]> GetVectorsAsync(string[] texts)
+    public async Task<float[]?[]> GetVectorsAsync(string[] texts, CancellationToken cancellationToken = default)
     {
         var results = new float[]?[texts.Length];
         await Parallel.ForEachAsync(
             texts.Select((text, i) => (text, i)),
-            new ParallelOptions { MaxDegreeOfParallelism = 5 },
+            new ParallelOptions { MaxDegreeOfParallelism = 5, CancellationToken = cancellationToken },
             async (item, ct) =>
             {
-                try   { results[item.i] = await GetVectorAsync(item.text); }
+                try   { results[item.i] = await GetVectorAsync(item.text, ct); }
                 catch { results[item.i] = null; }
             });
         return results;
@@ -68,17 +68,17 @@ public class LocalEmbeddingService : IAiEmbeddingService
         _apiUrl = config["services:infinity-ai:api:0"] ?? "http://localhost:7997";
     }
 
-    public async Task<float[]> GetVectorAsync(string text)
+    public async Task<float[]> GetVectorAsync(string text, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(text)) return Array.Empty<float>();
 
-        var vectors = await GetVectorsAsync([text]);
+        var vectors = await GetVectorsAsync([text], cancellationToken);
         return vectors[0] ?? Array.Empty<float>();
     }
 
     // Infinity AI hỗ trợ input là string[] → gộp toàn bộ texts thành 1 HTTP request duy nhất.
     // Đây là chì khóa tối ưu: thay vì N round-trip, chỉ còn 1 round-trip bất kể batch size.
-    public async Task<float[]?[]> GetVectorsAsync(string[] texts)
+    public async Task<float[]?[]> GetVectorsAsync(string[] texts, CancellationToken cancellationToken = default)
     {
         if (texts.Length == 0) return [];
 
@@ -92,10 +92,10 @@ public class LocalEmbeddingService : IAiEmbeddingService
 
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(requestUrl, payload);
+            var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<InfinityEmbeddingResponse>();
+            var result = await response.Content.ReadFromJsonAsync<InfinityEmbeddingResponse>(cancellationToken);
             if (result?.Data is null) throw new Exception("Infinity: Data bị null.");
 
             // API trả về theo đúng thứ tự input

@@ -87,6 +87,12 @@ Production hardening notes and the release checklist are in:
 docs\production-readiness.md
 ```
 
+For a detailed map of the whole project, current architecture, service responsibilities, workflows, tests, and remaining gaps, read:
+
+```text
+docs\project-handbook.md
+```
+
 All APIs expose:
 
 ```text
@@ -127,8 +133,8 @@ k6 run perf\k6\rabbitmq-consumers.js -e RABBITMQ_MANAGEMENT_URL=http://localhost
 
 ## Remaining Hardening
 
-- Add Elasticsearch container tests for real index creation and search queries.
-- Add MassTransit harness tests for full order saga choreography.
 - Add seeded end-to-end tests against the real Aspire stack.
 - Add Docker image publish and deployment stages to CI.
 - Add coverage reporting and minimum coverage gates.
+- Add infrastructure-as-code manifests for real environments.
+- Add production runbooks for Elasticsearch reindex/rollback and database backup/restore.

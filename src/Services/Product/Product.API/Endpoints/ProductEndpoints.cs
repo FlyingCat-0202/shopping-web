@@ -1,15 +1,13 @@
-using Elastic.Clients.Elasticsearch;
-using Elastic.Clients.Elasticsearch.QueryDsl;
 using EventBus.Contracts;
 using EventBus.Infrastructure;
 using MassTransit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Product.API.Catalog;
 using Product.API.Dtos;
-using Product.API.IntegrationEvents.Consumers.Elastic;
+using Product.API.Search;
 using Product.Domain.Entities;
 using Product.Infrastructure.Data;
-using ProductEntity = Product.Domain.Entities.Product;
 
 namespace Product.API.Endpoints;
 
@@ -23,53 +21,17 @@ public static class ProductEndpoints
         // Lấy danh sách products và categories
         group.MapGet("/", async (
             [AsParameters] ProductCatalogRequest request,
-            ProductDbContext db,
+            IProductCatalogService catalogService,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                var page = Math.Max(request.Page, 1);
-                var pageSize = Math.Clamp(request.PageSize, 1, 50);
+                var result = await catalogService.GetCatalogAsync(request, cancellationToken);
 
-                var query = db.Products
-                    .AsNoTracking()
-                    .Where(p => p.IsActive);
-
-                query = ApplyCatalogFilters(query, request.CategoryId, request.Stock);
-
-                var totalItems = await query.CountAsync(cancellationToken);
-
-                var productList = await ApplyCatalogSort(query, request.Sort)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .Select(p => new ProductResponse(
-                        p.Id,
-                        p.Name,
-                        p.Price,
-                        p.StockQuantity,
-                        p.Description,
-                        p.ImageUrl,
-                        p.CategoryId,
-                        p.Category.Name))
-                    .ToListAsync(cancellationToken);
-
-                var categoryList = await db.Categories
-                    .AsNoTracking()
-                    .OrderBy(c => c.Name)
-                    .Select(c => new CategoryResponse(
-                        c.Id,
-                        c.Name,
-                        c.Description
-                    ))
-                    .ToListAsync(cancellationToken);
-
-                return Results.Ok(new ProductCategoryPageResponse(
-                    productList,
-                    categoryList,
-                    totalItems,
-                    page,
-                    pageSize));
+                return result.IsSuccess
+                    ? Results.Ok(result.Page)
+                    : Results.BadRequest(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -286,224 +248,16 @@ public static class ProductEndpoints
 
         group.MapGet("/search", async Task<IResult> (
             [AsParameters] SearchProductRequest request,
-            ProductDbContext db,
-            ElasticsearchClient elasticClient,
-            IAiEmbeddingService _aiEmbeddingService,
-            ILogger<Program> logger,
+            IProductSearchService searchService,
             CancellationToken cancellationToken) =>
         {
-            var page = Math.Max(request.Page, 1);
-            var pageSize = Math.Clamp(request.PageSize, 1, 50);
-            var keyword = request.Keyword?.Trim() ?? string.Empty;
-            var from = (page - 1) * pageSize;
-
-            var existingCategories = await db.Categories
-                                             .AsNoTracking()
-                                             .Select(p => new { p.Id, p.Name, p.Description })
-                                             .ToListAsync(cancellationToken);
-
-            // 2. Kiểm tra xem người dùng có gõ tên danh mục nào không
-            string? targetCategory = request.CategoryId is > 0
-                ? existingCategories.FirstOrDefault(c => c.Id == request.CategoryId.Value)?.Name
-                : null;
-            var stockStatus = NormalizeElasticStockStatus(request.Stock);
-
-            if (targetCategory is null && request.Keyword is not null)
+            var result = await searchService.SearchAsync(request, cancellationToken);
+            return Results.Ok(new
             {
-                // 1. Chuẩn hóa keyword và tách thành danh sách các từ vựng (chỉ làm 1 lần ngoài vòng lặp)
-                string normalizedKeyword = EndpointHelpers.NormalizeVietnamese(request.Keyword);
-                char[] separators = new[] { ' ', ',', '.', ';', '?', '!', '-', '_' };
-
-                string[] keywordWords = normalizedKeyword.Split(separators, StringSplitOptions.RemoveEmptyEntries);
-
-                // 2. Dùng LINQ để tính điểm
-                var bestCategoryMatch = existingCategories
-                    .Select(cat =>
-                    {
-                        string normalizedName = EndpointHelpers.NormalizeVietnamese(cat.Name ?? "");
-                        string normalizedDesc = EndpointHelpers.NormalizeVietnamese(cat.Description ?? "");
-
-                        // --- TIÊU CHÍ 1: Trùng khớp nguyên cụm hoàn toàn (Ưu tiên tuyệt đối) ---
-                        if (normalizedName == normalizedKeyword)
-                        {
-                            return new { Category = cat, Score = 100 };
-                        }
-
-                        // --- TIÊU CHÍ 2: Đếm từ khớp chính xác bằng HashSet ---
-
-                        // Đưa Name thành HashSet (Dùng StringComparer để không phân biệt hoa thường)
-                        HashSet<string> nameWords = normalizedName
-                            .Split(separators, StringSplitOptions.RemoveEmptyEntries)
-                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                        // Đưa Description thành HashSet
-                        HashSet<string> descWords = normalizedDesc
-                            .Split(separators, StringSplitOptions.RemoveEmptyEntries)
-                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                        // Đếm số từ của Keyword xuất hiện trong Name và Description
-                        int matchedWordsInName = keywordWords.Count(w => nameWords.Contains(w));
-                        int matchedWordsInDesc = keywordWords.Count(w => descWords.Contains(w));
-
-                        return new { Category = cat, Score = Math.Max(matchedWordsInName, matchedWordsInDesc)};
-                    })
-                    .Where(x => x.Score > 0)          // Chỉ lấy những category có điểm
-                    .OrderByDescending(x => x.Score)  // Lấy điểm cao nhất đưa lên đầu
-                    .FirstOrDefault();
-
-                // 3. Gán kết quả
-                if (bestCategoryMatch != null)
-                {
-                    targetCategory = bestCategoryMatch.Category.Name;
-                }
-            }
-
-            try
-            {
-                if (string.IsNullOrWhiteSpace(request.Keyword))
-                {
-                    return await SearchProductsFromDatabase(
-                        db,
-                        keyword,
-                        page,
-                        pageSize,
-                        request.CategoryId,
-                        request.Stock,
-                        request.Sort,
-                        cancellationToken);
-                }
-
-                // 1. Lấy vector của từ khóa từ AI Model 
-                float[] queryVector = await _aiEmbeddingService.GetVectorAsync(request.Keyword);
-                var normalizedQueryVector = ElasticProductIndex.NormalizeVector(queryVector, logger, $"search keyword '{keyword}'");
-                var useVectorSearch = normalizedQueryVector is not null;
-                var vectorResultCount = Math.Min(Math.Max(from + pageSize, pageSize), 1000);
-                var vectorCandidateCount = Math.Min(Math.Max(vectorResultCount * 5, 100), 10_000);
-                var elasticFilters = BuildElasticFilters(targetCategory, stockStatus);
-
-                // 2. Thực hiện Hybrid Search
-                var searchResponse = await elasticClient.SearchAsync<ProductEsDocument>(s =>
-                {
-                    var descriptor = s
-                        .Indices(ElasticProductIndex.Name)
-                        .From(from)
-                        .Size(pageSize)
-                        .Query(q => q
-                            .Bool(b =>
-                            {
-                                // CẤU HÌNH SHOULD: Vector search & BM25
-                                if (useVectorSearch)
-                                {
-                                    b.Should(
-                                        sh1 => sh1.Knn(k => k
-                                            .Field(f => f.NameEmbeddingVector)
-                                            .QueryVector(normalizedQueryVector!)
-                                            .K(vectorResultCount)
-                                            .NumCandidates(vectorCandidateCount)
-                                            .Filter(elasticFilters)
-                                        ),
-
-                                        sh2 => sh2.MultiMatch(mm => mm
-                                            .Query(request.Keyword)
-                                            .Fields(new[] { "name^5", "categoryName" })
-                                            .Fuzziness(new Fuzziness("AUTO"))
-                                        )
-                                    );
-                                }
-                                else
-                                {
-                                    b.Should(sh => sh.MultiMatch(mm => mm
-                                        .Query(request.Keyword)
-                                        .Fields(new[] { "name^5", "categoryName" })
-                                        .Fuzziness(new Fuzziness("AUTO"))
-                                    ));
-                                }
-
-                                b.Filter(elasticFilters);
-                                b.MinimumShouldMatch(1);
-                            })
-                        );
-
-                    ApplyElasticSort(descriptor, request.Sort);
-                },
-                    cancellationToken
-                );
-
-                if (searchResponse.IsValidResponse)
-                {
-                    var documents = searchResponse.Documents.ToList();
-                    if (stockStatus is not null && documents.Count == 0)
-                    {
-                        logger.LogWarning(
-                            "Elasticsearch returned no results for stock filter {StockStatus}. Falling back to database search; the index may need metadata reindexing.",
-                            stockStatus);
-
-                        return await SearchProductsFromDatabase(
-                            db,
-                            keyword,
-                            page,
-                            pageSize,
-                            request.CategoryId,
-                            request.Stock,
-                            request.Sort,
-                            cancellationToken);
-                    }
-
-                    var documentIds = documents.Select(doc => doc.Id).ToList();
-                    var productsById = await db.Products
-                        .AsNoTracking()
-                        .Where(p => documentIds.Contains(p.Id))
-                        .Select(p => new ProductResponse(
-                            p.Id,
-                            p.Name,
-                            p.Price,
-                            p.StockQuantity,
-                            p.Description,
-                            p.ImageUrl,
-                            p.CategoryId,
-                            p.Category.Name))
-                        .ToDictionaryAsync(p => p.Id, cancellationToken);
-
-                    var items = documents.Select(doc =>
-                        productsById.TryGetValue(doc.Id, out var product)
-                            ? product
-                            : new ProductResponse(
-                                doc.Id,
-                                doc.Name,
-                                doc.Price,
-                                doc.StockQuantity,
-                                doc.Description,
-                                doc.ImageUrl,
-                                doc.CategoryId,
-                                doc.CategoryName));
-
-                    return Results.Ok(new
-                    {
-                        TotalItems = searchResponse.Total,
-                        CurrentPage = page,
-                        Items = items
-                    });
-                }
-
-                logger.LogWarning(
-                    "Elasticsearch search failed. Falling back to database search. Details: {DebugInformation}",
-                    searchResponse.DebugInformation);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Elasticsearch search threw an exception. Falling back to database search.");
-            }
-
-            // Fallback cuối cùng nếu Elastic lỗi
-            return await SearchProductsFromDatabase(
-                db,
-                keyword,
-                page,
-                pageSize,
-                request.CategoryId,
-                request.Stock,
-                request.Sort,
-                cancellationToken);
+                result.TotalItems,
+                result.CurrentPage,
+                result.Items
+            });
         });
     }
 
@@ -517,124 +271,4 @@ public static class ProductEndpoints
         await publishEndpoint.Publish(msg!, cancellationToken);
     }
 
-    private static async Task<IResult> SearchProductsFromDatabase(
-        ProductDbContext db,
-        string keyword,
-        int page,
-        int pageSize,
-        int? categoryId,
-        string? stock,
-        string? sort,
-        CancellationToken cancellationToken)
-    {
-        var query = db.Products
-            .AsNoTracking()
-            .Where(p => p.IsActive);
-
-        query = ApplyCatalogFilters(query, categoryId, stock);
-
-        if (!string.IsNullOrWhiteSpace(keyword))
-        {
-            var pattern = $"%{keyword}%";
-            query = query.Where(p =>
-                EF.Functions.ILike(p.Name, pattern) ||
-                (p.Description != null && EF.Functions.ILike(p.Description, pattern)) ||
-                EF.Functions.ILike(p.Category.Name, pattern));
-        }
-
-        var totalItems = await query.CountAsync(cancellationToken);
-        var items = await ApplyCatalogSort(query, sort)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(p => new ProductResponse(
-                p.Id,
-                p.Name,
-                p.Price,
-                p.StockQuantity,
-                p.Description,
-                p.ImageUrl,
-                p.CategoryId,
-                p.Category.Name))
-            .ToListAsync(cancellationToken);
-
-        return Results.Ok(new
-        {
-            TotalItems = totalItems,
-            CurrentPage = page,
-            Items = items
-        });
-    }
-
-    private static IQueryable<ProductEntity> ApplyCatalogFilters(
-        IQueryable<ProductEntity> query,
-        int? categoryId,
-        string? stock)
-    {
-        if (categoryId is > 0)
-            query = query.Where(p => p.CategoryId == categoryId.Value);
-
-        query = stock?.Trim().ToLowerInvariant() switch
-        {
-            "instock" => query.Where(p => p.StockQuantity > 0),
-            "outofstock" => query.Where(p => p.StockQuantity <= 0),
-            _ => query
-        };
-
-        return query;
-    }
-
-    private static string? NormalizeElasticStockStatus(string? stock)
-        => stock?.Trim().ToLowerInvariant() switch
-        {
-            "instock" => ElasticProductIndex.InStock,
-            "outofstock" => ElasticProductIndex.OutOfStock,
-            _ => null
-        };
-
-    private static Action<QueryDescriptor<ProductEsDocument>>[] BuildElasticFilters(
-        string? categoryName,
-        string? stockStatus)
-    {
-        var filters = new List<Action<QueryDescriptor<ProductEsDocument>>>
-        {
-            f => f.Term(t => t.Field(p => p.IsActive).Value(true))
-        };
-
-        if (!string.IsNullOrWhiteSpace(categoryName))
-            filters.Add(f => f.Term(t => t.Field(p => p.CategoryName).Value(categoryName)));
-
-        if (!string.IsNullOrWhiteSpace(stockStatus))
-            filters.Add(f => f.Term(t => t.Field(p => p.StockStatus).Value(stockStatus)));
-
-        return filters.ToArray();
-    }
-
-    private static IOrderedQueryable<ProductEntity> ApplyCatalogSort(
-        IQueryable<ProductEntity> query,
-        string? sort)
-        => sort?.Trim().ToLowerInvariant() switch
-        {
-            "price-asc" => query.OrderBy(p => p.Price).ThenBy(p => p.Name),
-            "price-desc" => query.OrderByDescending(p => p.Price).ThenBy(p => p.Name),
-            "name" => query.OrderBy(p => p.Name),
-            _ => query.OrderBy(p => p.Name)
-        };
-
-    private static void ApplyElasticSort(
-        SearchRequestDescriptor<ProductEsDocument> descriptor,
-        string? sort)
-    {
-        switch (sort?.Trim().ToLowerInvariant())
-        {
-            case "price-asc":
-                descriptor.Sort(s => s.Field(f => f.Field(p => p.Price).Order(SortOrder.Asc)));
-                break;
-            case "price-desc":
-                descriptor.Sort(s => s.Field(f => f.Field(p => p.Price).Order(SortOrder.Desc)));
-                break;
-            case "name":
-                descriptor.Sort(s => s.Field(f => f.Field(p => p.NameSort).Order(SortOrder.Asc)));
-                break;
-        }
-    }
 }

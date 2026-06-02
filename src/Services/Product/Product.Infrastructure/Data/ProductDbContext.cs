@@ -52,6 +52,21 @@ public class ProductDbContext(DbContextOptions<ProductDbContext> options) : DbCo
             entity.HasIndex(p => p.Name)
                 .HasDatabaseName("IX_Products_Name");
 
+            entity.HasIndex(p => new { p.IsActive, p.Name, p.Id })
+                  .HasDatabaseName("IX_Products_Catalog_Name");
+
+            entity.HasIndex(p => new { p.IsActive, p.Price, p.Id })
+                  .HasDatabaseName("IX_Products_Catalog_Price");
+
+            entity.HasIndex(p => new { p.IsActive, p.CategoryId, p.Name, p.Id })
+                  .HasDatabaseName("IX_Products_Catalog_Category_Name");
+
+            entity.HasIndex(p => new { p.IsActive, p.CategoryId, p.Price, p.Id })
+                  .HasDatabaseName("IX_Products_Catalog_Category_Price");
+
+            entity.HasIndex(p => new { p.IsActive, p.StockQuantity, p.Name, p.Id })
+                  .HasDatabaseName("IX_Products_Catalog_Stock_Name");
+
             // Quan hệ N-1 với Category
             entity.HasOne(p => p.Category)
                   .WithMany()

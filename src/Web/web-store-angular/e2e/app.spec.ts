@@ -12,6 +12,8 @@ const product = {
 };
 
 test.beforeEach(async ({ page }) => {
+  let orderState = { status: 'Processing', paymentMethod: 'COD' };
+
   await page.route('http://localhost:5000/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -75,33 +77,33 @@ test.beforeEach(async ({ page }) => {
     if (path === '/api/order/' && method === 'POST') {
       const body = request.postDataJSON();
       await setCartQuantity(page, body.paymentMethod === 'COD' ? 0 : 1);
-      await setOrder(page, body.paymentMethod === 'COD' ? 'Processing' : 'PaymentPending', body.paymentMethod);
+      orderState = {
+        status: body.paymentMethod === 'COD' ? 'Processing' : 'PaymentPending',
+        paymentMethod: body.paymentMethod,
+      };
       return json({ orderId: 'order-1', message: 'Order is being processed.' });
     }
 
     if ((path === '/api/order/' || path === '/api/order/admin') && method === 'GET') {
-      return json({ items: [await orderSummary(page)] });
+      return json({ items: [orderSummary(orderState)] });
     }
 
-    if (path === '/api/order/order-1/ship' && method === 'PUT') {
-      await setOrder(page, 'Shipped', 'COD');
+    if (/^\/api\/order\/[^/]+\/ship\/?$/.test(path) && method === 'PUT') {
+      orderState = { status: 'Shipped', paymentMethod: 'COD' };
       return json({ message: 'Order shipped.' });
     }
 
-    if (path === '/api/order/order-1/deliver' && method === 'PUT') {
-      await setOrder(page, 'Delivered', 'COD');
+    if (/^\/api\/order\/[^/]+\/deliver\/?$/.test(path) && method === 'PUT') {
+      orderState = { status: 'Delivered', paymentMethod: 'COD' };
       return json({ message: 'Order delivered.' });
     }
 
+    if (path === '/api/payment/orders/query' && method === 'POST') {
+      return json([paymentSummary()]);
+    }
+
     if (path === '/api/payment/order/order-1') {
-      return json({
-        id: 'payment-1',
-        orderId: 'order-1',
-        customerId: 'customer-1',
-        amount: 89.99,
-        paymentMethod: 'MeiMei',
-        status: 'Pending',
-      });
+      return json(paymentSummary());
     }
 
     if (path === '/api/payment/payment-1/providers/meimei/checkout' && method === 'POST') {
@@ -123,7 +125,10 @@ test.beforeEach(async ({ page }) => {
     }
 
     if (path === '/api/notifications/') {
-      return json({ items: [] });
+      return json({
+        items: [],
+        unreadCount: 0,
+      });
     }
 
     return json({});
@@ -173,7 +178,6 @@ test('online checkout exposes wallet payment action', async ({ page }) => {
 
 test('admin can ship and deliver an order', async ({ page }) => {
   await page.goto('/');
-  await setOrder(page, 'Processing', 'COD');
   await login(page, 'admin@shopping.local');
   await page.getByRole('button', { name: 'Account', exact: true }).click();
   const account = page.locator('aside[aria-label="Account"]');
@@ -203,15 +207,7 @@ async function cartQuantity(page: Page) {
   return page.evaluate(() => Number(window.sessionStorage.getItem('e2e-cart-quantity') ?? 0));
 }
 
-async function setOrder(page: Page, status: string, paymentMethod: string) {
-  await page.evaluate(
-    (value) => window.sessionStorage.setItem('e2e-order', JSON.stringify(value)),
-    { status, paymentMethod },
-  );
-}
-
-async function orderSummary(page: Page) {
-  const state = await page.evaluate(() => JSON.parse(window.sessionStorage.getItem('e2e-order') ?? 'null'));
+function orderSummary(state: { status: string; paymentMethod: string }) {
   const status = state?.status ?? 'Processing';
   const paymentMethod = state?.paymentMethod ?? 'COD';
   const paymentStatus = status === 'Delivered' ? 'Paid' : paymentMethod === 'COD' ? 'Unpaid' : status === 'PaymentPending' ? 'Unpaid' : 'Paid';
@@ -226,5 +222,16 @@ async function orderSummary(page: Page) {
     paymentMethod,
     canCancel: status === 'Processing' && paymentMethod === 'COD',
     canReturn: status === 'Delivered',
+  };
+}
+
+function paymentSummary() {
+  return {
+    id: 'payment-1',
+    orderId: 'order-1',
+    customerId: 'customer-1',
+    amount: 89.99,
+    paymentMethod: 'MeiMei',
+    status: 'Pending',
   };
 }

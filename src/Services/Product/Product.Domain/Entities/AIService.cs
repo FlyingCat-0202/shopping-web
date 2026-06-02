@@ -4,13 +4,13 @@ namespace Product.Domain.Entities;
 
 public interface IAiEmbeddingService
 {
-    Task<float[]> GetVectorAsync(string text);
+    Task<float[]> GetVectorAsync(string text, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gộp nhiều text thành 1 HTTP request duy nhất đến AI server.
     /// Trả về mảng vector tương ứng theo thứ tự, null nếu text đó lỗi.
     /// </summary>
-    Task<float[]?[]> GetVectorsAsync(string[] texts);
+    Task<float[]?[]> GetVectorsAsync(string[] texts, CancellationToken cancellationToken = default);
 }
 
 // Các class DTO dùng để parse JSON trả về từ Gemini

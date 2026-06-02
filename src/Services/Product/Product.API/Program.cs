@@ -1,13 +1,14 @@
-using Elastic.Clients.Elasticsearch;
 using EventBus.Extensions;
 using EventBus.Infrastructure;
 using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Product.API.Catalog;
 using Product.API.Endpoints;
 using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
+using Product.API.Search;
 using Product.API.Validators;
 using Product.Domain.Entities;
 using Product.Infrastructure.AISearch;
@@ -29,9 +30,19 @@ builder.AddNpgsqlDbContext<ProductDbContext>("product-db", configureDbContextOpt
 builder.AddApiServiceDefaults();
 builder.Services.AddValidatorsFromAssemblyContaining<ProductRequestValidator>();
 builder.Services.AddScoped<IStockReservationService, StockReservationService>();
+builder.Services.AddScoped<IProductElasticSearch, ProductElasticSearch>();
+builder.Services.AddScoped<IProductDatabaseSearch, ProductDatabaseSearch>();
+builder.Services.AddScoped<IProductSearchCategoryResolver, ProductSearchCategoryResolver>();
+builder.Services.AddScoped<IProductSearchService, ProductSearchService>();
+builder.Services.AddScoped<IProductCatalogService, ProductCatalogService>();
+builder.Services.Configure<ProductSearchOptions>(
+    builder.Configuration.GetSection(ProductSearchOptions.SectionName));
+builder.Services.Configure<ProductCatalogOptions>(
+    builder.Configuration.GetSection(ProductCatalogOptions.SectionName));
+builder.Services.AddHostedService<ElasticIndexStartupService>();
 builder.AddElasticsearchClient(
     "elasticsearch",
-    configureClientSettings: settings => settings.DefaultIndex("products"));
+    configureClientSettings: settings => settings.DefaultIndex(ElasticProductIndex.Name));
 
 // ── JWT Auth ──────────────────────────────────────────────────────────────────
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -132,20 +143,6 @@ app.UseAuthorization();
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapApiHealthChecks();
 
-using (var scope = app.Services.CreateScope())
-{
-    var elasticClient = scope.ServiceProvider.GetRequiredService<ElasticsearchClient>();
-    var db = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
-    var aiEmbeddingService = scope.ServiceProvider.GetRequiredService<IAiEmbeddingService>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-    // Gọi hàm cấu hình
-    var createdIndex = await ElasticConfigurator.SetupIndexAsync(elasticClient, logger);
-    if (createdIndex)
-    {
-        await ElasticConfigurator.RebuildIndexFromDatabaseAsync(db, elasticClient, aiEmbeddingService, logger);
-    }
-}
 app.MapProductEndpoints();
 
 app.Run();

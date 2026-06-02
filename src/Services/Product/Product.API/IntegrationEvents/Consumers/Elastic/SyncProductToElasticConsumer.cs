@@ -35,7 +35,7 @@ public class SyncProductToElasticConsumer(
         // Bước 1: Lấy embedding cho toàn bộ batch bằng 1 HTTP request duy nhất.
         //         Infinity AI nhận input: string[] → trả về vector[] theo đúng thứ tự.
         var names = messages.Select(m => m.Name).ToArray();
-        float[]?[] vectors = await aiEmbeddingService.GetVectorsAsync(names);
+        float[]?[] vectors = await aiEmbeddingService.GetVectorsAsync(names, context.CancellationToken);
 
         // Bước 2: Build documents rồi bulk index — 1 ES request cho N documents.
         var docs = messages.Select((msg, i) =>
@@ -57,7 +57,7 @@ public class SyncProductToElasticConsumer(
             );
         }).ToList();
 
-        var bulkResponse = await e.IndexManyAsync(docs, ElasticProductIndex.Name);
+        var bulkResponse = await e.IndexManyAsync(docs, ElasticProductIndex.Name, context.CancellationToken);
 
         if (bulkResponse.Errors)
         {
@@ -76,7 +76,7 @@ public class SyncProductToElasticConsumer(
         var message = context.Message;
         try
         {
-            var response = await e.DeleteAsync(ElasticProductIndex.Name, message.Id);
+            var response = await e.DeleteAsync(ElasticProductIndex.Name, message.Id, context.CancellationToken);
 
             if (!response.IsValidResponse)
             {
@@ -105,7 +105,7 @@ public class SyncProductToElasticConsumer(
         var message = context.Message;
         try
         {
-            float[] newVector = await aiEmbeddingService.GetVectorAsync(message.Name);
+            float[] newVector = await aiEmbeddingService.GetVectorAsync(message.Name, context.CancellationToken);
             var embeddingVector = ElasticProductIndex.NormalizeVector(newVector, logger, $"product {message.Id}");
             var partialDoc = new
             {
@@ -125,7 +125,8 @@ public class SyncProductToElasticConsumer(
             var response = await e.UpdateAsync<ProductEsDocument, object>(
                 ElasticProductIndex.Name,
                 message.Id,
-                u => u.Doc(partialDoc));
+                u => u.Doc(partialDoc),
+                context.CancellationToken);
 
             if (!response.IsValidResponse)
                 throw new Exception($"Update failed: {response.DebugInformation}");

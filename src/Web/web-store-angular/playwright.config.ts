@@ -6,7 +6,8 @@ export default defineConfig({
   expect: {
     timeout: 5_000,
   },
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 1,
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:4200',
@@ -15,7 +16,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run start -- --host 127.0.0.1 --port 4200',
     url: 'http://127.0.0.1:4200',
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [

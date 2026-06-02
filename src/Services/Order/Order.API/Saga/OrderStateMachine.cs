@@ -35,15 +35,15 @@ public class OrderStateMachine : MassTransitStateMachine<OrderSagaInstance>
     {
         InstanceState(x => x.CurrentState);
 
-        Event(() => OrderSubmitted, x => x.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => StockReserved, x => x.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => StockReservationFailed, x => x.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => PaymentCreated, x => x.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => PaymentSucceeded, x => x.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => PaymentRefunded, x => x.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => PaymentFailed, x => x.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => StockReleased, x => x.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => CancelRequested, x => x.CorrelateById(ctx => ctx.Message.OrderId));
+        Event(() => OrderSubmitted, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
+        Event(() => StockReserved, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
+        Event(() => StockReservationFailed, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
+        Event(() => PaymentCreated, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
+        Event(() => PaymentSucceeded, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
+        Event(() => PaymentRefunded, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
+        Event(() => PaymentFailed, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
+        Event(() => StockReleased, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
+        Event(() => CancelRequested, x => x.CorrelateById(ctx => ctx.Message.CorrelationId));
         Event(() => StockTimedOut, x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => PaymentTimedOut, x => x.CorrelateById(ctx => ctx.Message.OrderId));
 

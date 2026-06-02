@@ -33,6 +33,9 @@ public static class PaymentEndpoints
         group.MapGet("/order/{orderId:guid}", GetPaymentByOrderId)
             .WithName("GetPaymentByOrderId");
 
+        group.MapPost("/orders/query", GetPaymentsByOrderIds)
+            .WithName("GetPaymentsByOrderIds");
+
         group.MapGet("/providers", GetPaymentProviders)
             .WithName("GetPaymentProviders");
 
@@ -93,6 +96,41 @@ public static class PaymentEndpoints
             .FirstOrDefaultAsync(cancellationToken);
 
         return payment is null ? Results.NotFound() : Results.Ok(payment);
+    }
+
+    private static async Task<IResult> GetPaymentsByOrderIds(
+        PaymentsByOrderIdsRequest request,
+        ClaimsPrincipal user,
+        PaymentDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (!EndpointHelpers.TryGetCustomerId(user, out var customerId))
+            return Results.Unauthorized();
+
+        var orderIds = request.OrderIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .Take(50)
+            .ToArray();
+
+        if (orderIds.Length == 0)
+            return Results.Ok(Array.Empty<PaymentResponse>());
+
+        var payments = await db.Payments.AsNoTracking()
+            .Where(p => p.CustomerId == customerId && orderIds.Contains(p.OrderId))
+            .Select(p => new PaymentResponse(
+                p.Id,
+                p.OrderId,
+                p.Amount,
+                p.PaymentMethod,
+                p.Status.ToString(),
+                p.ProviderTransactionId,
+                p.FailureReason,
+                p.CreatedAt,
+                p.CompletedAt))
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(payments);
     }
 
     private static IResult GetPaymentProviders(PaymentProviderCatalog providers)

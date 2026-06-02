@@ -140,6 +140,12 @@ public static class NotificationEndpoints
             query = query.Where(n => !n.IsRead);
 
         var totalCount = await query.CountAsync(cancellationToken);
+        var unreadCount = customerId.HasValue
+            ? await db.Notifications
+                .AsNoTracking()
+                .CountAsync(n => n.CustomerId == customerId.Value && !n.IsRead, cancellationToken)
+            : 0;
+
         var items = await query
             .OrderByDescending(n => n.CreatedAt)
             .Skip(pageIndex * pageSize)
@@ -160,7 +166,8 @@ public static class NotificationEndpoints
             items,
             totalCount,
             pageIndex,
-            pageSize));
+            pageSize,
+            unreadCount));
     }
 
     private static NotificationResponse ToResponse(Notification.Domain.Entities.NotificationMessage notification)

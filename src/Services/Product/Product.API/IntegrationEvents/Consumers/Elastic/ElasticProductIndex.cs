@@ -17,7 +17,18 @@ public static class ElasticProductIndex
             return null;
 
         if (vector.Length == EmbeddingDimensions)
+        {
+            if (vector.All(value => value == 0f))
+            {
+                logger.LogWarning(
+                    "Bỏ qua vector embedding cho {Context} vì Elasticsearch cosine similarity không chấp nhận vector có độ lớn bằng 0.",
+                    context);
+
+                return null;
+            }
+
             return vector;
+        }
 
         logger.LogWarning(
             "Bỏ qua vector embedding cho {Context} vì số chiều là {ActualDimensions}, nhưng index {IndexName} yêu cầu {ExpectedDimensions}.",
