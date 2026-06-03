@@ -26,7 +26,7 @@ jobs:
         run: dotnet restore shopping.slnx
 
       - name: Test
-        run: dotnet test shopping.slnx --configuration Release --no-restore --logger "trx;LogFileName=backend-tests.trx"
+        run: dotnet test shopping.slnx --configuration Release --no-restore -m:1 --logger "trx;LogFileName=backend-tests.trx"
 
       - name: Upload backend test results
         if: always()
