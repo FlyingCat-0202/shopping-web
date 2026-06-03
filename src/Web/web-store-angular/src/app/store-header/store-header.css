@@ -1,0 +1,191 @@
+:host {
+  display: block;
+}
+
+button {
+  border-radius: 6px;
+  font: inherit;
+}
+
+.site-hero {
+  position: relative;
+  min-height: clamp(22rem, 38vh, 30rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(90deg, rgba(13, 17, 23, 0.84) 0%, rgba(13, 17, 23, 0.52) 44%, rgba(13, 17, 23, 0.08) 100%),
+    linear-gradient(180deg, rgba(13, 17, 23, 0.2), rgba(13, 17, 23, 0.5)),
+    url("https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=2400&q=85") center 46% / cover no-repeat;
+  color: #fff;
+}
+
+.topbar {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem clamp(1rem, 4vw, 4rem);
+}
+
+.brand {
+  display: inline-grid;
+  grid-template-columns: 3.35rem auto;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 3.25rem;
+  color: inherit;
+  text-decoration: none;
+  text-transform: uppercase;
+  line-height: 0.9;
+  font-weight: 900;
+}
+
+.brand svg {
+  width: 3.35rem;
+  height: 2.55rem;
+}
+
+.brand span,
+.brand small {
+  grid-column: 2;
+}
+
+.brand span {
+  font-size: 1rem;
+}
+
+.brand small {
+  margin-top: -0.2rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.28rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(10, 13, 18, 0.42);
+  backdrop-filter: blur(14px);
+}
+
+.icon-button {
+  position: relative;
+  display: inline-grid;
+  width: 2.45rem;
+  height: 2.45rem;
+  place-items: center;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.icon-button svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cart-count {
+  position: absolute;
+  top: 0.12rem;
+  right: 0.05rem;
+  display: none;
+  min-width: 1.08rem;
+  height: 1.08rem;
+  place-items: center;
+  border: 2px solid rgba(10, 13, 18, 0.72);
+  border-radius: 999px;
+  color: #fff;
+  background: #e8552f;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.cart-count[data-visible="true"] {
+  display: grid;
+}
+
+.notification-count {
+  background: #1f7a45;
+}
+
+.hero-copy {
+  width: min(74rem, 100%);
+  padding: 0 clamp(1rem, 4vw, 4rem) clamp(2rem, 5vw, 4rem);
+}
+
+.hero-copy h1 {
+  margin: 0;
+  max-width: 48rem;
+  font-size: clamp(2.45rem, 5vw, 4.9rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.hero-copy p {
+  margin: 0.8rem 0 0;
+  max-width: 42rem;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: clamp(1.05rem, 1.55vw, 1.35rem);
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .site-hero {
+    min-height: 23rem;
+    background-position: 58% top;
+  }
+
+  .topbar {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .brand {
+    grid-template-columns: 2.6rem auto;
+    gap: 0.45rem;
+  }
+
+  .brand svg {
+    width: 2.6rem;
+    height: 2rem;
+  }
+
+  .brand span {
+    font-size: 0.86rem;
+  }
+
+  .brand small {
+    font-size: 0.56rem;
+  }
+
+  .nav-actions {
+    gap: 0.2rem;
+  }
+
+  .icon-button {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .hero-copy {
+    padding: 0 1rem 1.6rem;
+  }
+}

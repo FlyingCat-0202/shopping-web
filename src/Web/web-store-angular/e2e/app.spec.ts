@@ -145,6 +145,19 @@ test('renders the storefront shell', async ({ page }) => {
   await expect(page.getByText('Trail Jacket')).toBeVisible();
 });
 
+test('customer can open a product detail route and return to catalog', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('link', { name: 'View Trail Jacket' }).click();
+  await expect(page).toHaveURL(`/products/${product.id}`);
+  await expect(page.getByLabel('Product detail')).toContainText('Trail Jacket');
+  await expect(page.getByLabel('Product detail')).toContainText('Water resistant shell');
+
+  await page.getByRole('button', { name: 'Back to products' }).click();
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('searchbox')).toBeVisible();
+});
+
 test('customer can login, browse, add cart, and checkout COD', async ({ page }) => {
   await page.goto('/');
   await login(page, 'customer@example.test');

@@ -1,0 +1,45 @@
+<aside *ngIf="isOpen" class="modal-layer is-open" aria-label="Product editor" (click)="close.emit()">
+  <form class="modal-card stack-form" (click)="$event.stopPropagation()" (ngSubmit)="save.emit()">
+    <div class="modal-heading">
+      <h2>Edit product</h2>
+      <button class="icon-button" type="button" aria-label="Close product editor" (click)="close.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <label>
+      Product name
+      <input name="editProductName" [(ngModel)]="model.name" required />
+    </label>
+    <label>
+      Price
+      <input name="editPrice" type="number" min="0.01" step="0.01" [(ngModel)]="model.price" required />
+    </label>
+    <label>
+      Stock
+      <input name="editStockQuantity" type="number" min="0" step="1" [(ngModel)]="model.stockQuantity" required />
+    </label>
+    <label>
+      Category
+      <select name="editProductCategoryId" [(ngModel)]="model.categoryId" required>
+        <option *ngFor="let category of categories; trackBy: trackByCategory" [ngValue]="category.id">{{ category.name }}</option>
+      </select>
+    </label>
+    <label>
+      Image URL
+      <input name="editImageUrl" type="url" [(ngModel)]="model.imageUrl" />
+    </label>
+    <label>
+      Description
+      <textarea name="editProductDescription" rows="3" [(ngModel)]="model.description"></textarea>
+    </label>
+    <label class="checkbox-row">
+      <input name="editIsActive" type="checkbox" [(ngModel)]="model.isActive" />
+      Active
+    </label>
+    <button class="primary-button" type="submit" [disabled]="busy">
+      {{ busy ? 'Saving...' : 'Save product' }}
+    </button>
+  </form>
+</aside>

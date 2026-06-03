@@ -1,0 +1,59 @@
+<aside *ngIf="isOpen" class="cart-drawer is-open" aria-label="Notifications" (click)="close.emit()">
+  <div class="cart-panel notification-panel" (click)="$event.stopPropagation()">
+    <div class="cart-heading">
+      <div>
+        <h2>Notifications</h2>
+        <p class="panel-subtitle">{{ unreadCount }} unread</p>
+      </div>
+      <button class="icon-button" type="button" aria-label="Close notifications" (click)="close.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="notification-toolbar">
+      <button class="chip" type="button" [class.is-active]="!unreadOnly" (click)="unreadOnlyChange.emit(false)">
+        All
+      </button>
+      <button class="chip" type="button" [class.is-active]="unreadOnly" (click)="unreadOnlyChange.emit(true)">
+        Unread
+      </button>
+      <button
+        class="secondary-button"
+        type="button"
+        [disabled]="unreadCount === 0 || markingAllRead"
+        (click)="markAllRead.emit()"
+      >
+        {{ markingAllRead ? 'Marking...' : 'Mark all read' }}
+      </button>
+    </div>
+
+    <div class="notification-list">
+      <p class="empty-state" *ngIf="loading">Loading notifications...</p>
+      <p class="empty-state" *ngIf="!loading && notifications.length === 0">No notifications yet.</p>
+
+      <article
+        class="notification-card"
+        *ngFor="let notification of notifications; trackBy: trackByNotification"
+        [class.is-unread]="!notification.isRead"
+      >
+        <header>
+          <span class="status-pill" [ngClass]="notification.isRead ? '' : 'is-pending'">{{ notification.type }}</span>
+          <time>{{ formatDate(notification.createdAt) }}</time>
+        </header>
+        <h3>{{ notification.title }}</h3>
+        <p>{{ notification.message }}</p>
+        <button
+          class="secondary-button"
+          type="button"
+          *ngIf="!notification.isRead"
+          [disabled]="isNotificationBusy(notification)"
+          (click)="markRead.emit(notification)"
+        >
+          {{ isNotificationBusy(notification) ? 'Saving...' : 'Mark read' }}
+        </button>
+      </article>
+    </div>
+  </div>
+</aside>

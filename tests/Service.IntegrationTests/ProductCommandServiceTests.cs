@@ -16,7 +16,7 @@ public sealed class ProductCommandServiceTests
     public async Task CreateCategoryRejectsDuplicateNames()
     {
         await using var db = CreateInMemoryDbContext();
-        db.Categories.Add(new Category { Name = "Outerwear" });
+        db.Categories.Add(Category.Create("Outerwear"));
         await db.SaveChangesAsync();
 
         var service = new ProductAdminCommandService(db, new CapturingPublishEndpoint());
@@ -45,18 +45,18 @@ public sealed class ProductCommandServiceTests
     public async Task QueueUpdateProductPublishesCommandWhenProductAndCategoryExist()
     {
         await using var db = CreateInMemoryDbContext();
-        var category = new Category { Name = "Outerwear" };
+        var category = Category.Create("Outerwear");
         var productId = Guid.NewGuid();
         db.Categories.Add(category);
-        db.Products.Add(new Product.Domain.Entities.Product
-        {
-            Id = productId,
-            Name = "Trail Jacket",
-            Price = 89,
-            StockQuantity = 5,
-            Category = category,
-            IsActive = true
-        });
+        await db.SaveChangesAsync();
+        db.Products.Add(Product.Domain.Entities.Product.Create(
+            "Trail Jacket",
+            89,
+            5,
+            category.Id,
+            description: null,
+            imageUrl: null,
+            id: productId));
         await db.SaveChangesAsync();
 
         var publisher = new CapturingPublishEndpoint();
@@ -75,7 +75,7 @@ public sealed class ProductCommandServiceTests
     public async Task QueueUpdateProductRejectsMismatchedRouteAndBodyIds()
     {
         await using var db = CreateInMemoryDbContext();
-        var category = new Category { Name = "Outerwear" };
+        var category = Category.Create("Outerwear");
         db.Categories.Add(category);
         await db.SaveChangesAsync();
 
@@ -95,7 +95,7 @@ public sealed class ProductCommandServiceTests
     public async Task MutationCreateProductPersistsProductAndPublishesCreatedEvent()
     {
         await using var db = CreateInMemoryDbContext();
-        var category = new Category { Name = "Outerwear" };
+        var category = Category.Create("Outerwear");
         db.Categories.Add(category);
         await db.SaveChangesAsync();
 
@@ -116,17 +116,16 @@ public sealed class ProductCommandServiceTests
     public async Task MutationDeleteProductSoftDeletesAndPublishesDeletedEvent()
     {
         await using var db = CreateInMemoryDbContext();
-        var category = new Category { Name = "Outerwear" };
-        var product = new Product.Domain.Entities.Product
-        {
-            Id = Guid.NewGuid(),
-            Name = "Trail Jacket",
-            Price = 89,
-            StockQuantity = 5,
-            Category = category,
-            IsActive = true
-        };
+        var category = Category.Create("Outerwear");
         db.Categories.Add(category);
+        await db.SaveChangesAsync();
+        var product = Product.Domain.Entities.Product.Create(
+            "Trail Jacket",
+            89,
+            5,
+            category.Id,
+            description: null,
+            imageUrl: null);
         db.Products.Add(product);
         await db.SaveChangesAsync();
 

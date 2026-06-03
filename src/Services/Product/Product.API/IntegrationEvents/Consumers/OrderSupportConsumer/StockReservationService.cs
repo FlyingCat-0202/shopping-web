@@ -60,7 +60,7 @@ public class StockReservationService(ProductDbContext dbContext) : IStockReserva
         foreach (var item in requestedItems)
         {
             var product = productById[item.ProductId];
-            product.StockQuantity -= item.Quantity;
+            product.ReserveStock(item.Quantity);
 
             dbContext.StockReservations.Add(
                 StockReservation.Create(
@@ -228,7 +228,7 @@ public class StockReservationService(ProductDbContext dbContext) : IStockReserva
 
         foreach (var reservation in releasableReservations)
         {
-            productById[reservation.ProductId].StockQuantity += reservation.Quantity;
+            productById[reservation.ProductId].ReleaseStock(reservation.Quantity);
             reservation.Release(releaseReason);
         }
     }

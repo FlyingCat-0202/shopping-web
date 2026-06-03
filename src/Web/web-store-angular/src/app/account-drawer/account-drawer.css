@@ -1,0 +1,298 @@
+:host {
+  display: contents;
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border-radius: 6px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(35, 74, 115, 0.18);
+}
+
+.cart-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(10, 13, 18, 0);
+  transition: background 0.22s ease;
+}
+
+.cart-drawer.is-open {
+  pointer-events: auto;
+  background: rgba(10, 13, 18, 0.42);
+}
+
+.cart-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  width: min(37rem, 100%);
+  height: 100%;
+  flex-direction: column;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+
+.cart-drawer.is-open .cart-panel {
+  transform: translateX(0);
+}
+
+.cart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #d9dee5;
+  padding: 1rem 1.15rem;
+}
+
+.cart-heading h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.icon-button {
+  position: relative;
+  display: inline-grid;
+  width: 2.45rem;
+  height: 2.45rem;
+  place-items: center;
+  border: 0;
+  color: #141414;
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: #eef2f5;
+}
+
+.icon-button svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.account-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0.7rem 1.15rem;
+}
+
+.auth-section {
+  padding: 1rem 0;
+  border-bottom: 1px solid #d9dee5;
+}
+
+.auth-section:first-child {
+  padding-top: 0;
+}
+
+.auth-section h3,
+.admin-payments h4 {
+  margin: 0 0 0.85rem;
+}
+
+.auth-tabs,
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.auth-tabs {
+  margin-bottom: 0.85rem;
+}
+
+.stack-form,
+.admin-payments,
+.orders-list,
+.payments-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stack-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: #68727f;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.stack-form input,
+.stack-form select,
+.stack-form textarea {
+  width: 100%;
+  border: 1px solid #d9dee5;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  padding: 0.72rem 0.78rem;
+}
+
+.tab-button,
+.secondary-button,
+.primary-button,
+.danger-button {
+  min-height: 2.65rem;
+  border: 1px solid transparent;
+  padding: 0 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.primary-button {
+  color: #fff;
+  background: #111;
+}
+
+.primary-button:hover {
+  background: #2a2a2a;
+}
+
+.secondary-button,
+.tab-button {
+  color: #111;
+  background: #eef2f5;
+}
+
+.secondary-button:hover,
+.tab-button:hover {
+  border-color: #aeb7c2;
+  background: #e6edf3;
+}
+
+.tab-button.is-active {
+  color: #fff;
+  background: #111;
+}
+
+.danger-button {
+  color: #fff;
+  background: #b42318;
+}
+
+.danger-button:hover {
+  background: #8f1c13;
+}
+
+.profile-card {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 1rem;
+}
+
+.profile-card span {
+  color: #e8552f;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.profile-card strong {
+  font-size: 1.1rem;
+}
+
+.profile-card p {
+  margin: 0;
+  color: #68727f;
+}
+
+.order-card,
+.payment-card {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.85rem;
+}
+
+.payment-card {
+  background: #fbfcfd;
+}
+
+.order-card header,
+.payment-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.order-card h4,
+.payment-card h5,
+.order-card p,
+.payment-card p {
+  margin: 0;
+}
+
+.order-card p,
+.payment-card p {
+  color: #68727f;
+}
+
+.status-pill {
+  width: fit-content;
+  border-radius: 999px;
+  background: #edf1f5;
+  color: #263442;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.status-pill.is-succeeded {
+  background: #e7f5ec;
+  color: #1f7a45;
+}
+
+.status-pill.is-failed,
+.status-pill.is-expired {
+  background: #fff0ed;
+  color: #b42318;
+}
+
+.status-pill.is-pending {
+  background: #fff7e6;
+  color: #94620f;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 2rem 0;
+  color: #68727f;
+}
+
+@media (max-width: 640px) {
+  .account-body {
+    padding: 0.7rem 1rem;
+  }
+}

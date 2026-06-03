@@ -1,0 +1,195 @@
+:host {
+  display: contents;
+}
+
+button {
+  border-radius: 6px;
+  font: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.cart-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(10, 13, 18, 0);
+  transition: background 0.22s ease;
+}
+
+.cart-drawer.is-open {
+  pointer-events: auto;
+  background: rgba(10, 13, 18, 0.42);
+}
+
+.cart-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  width: min(31rem, 100%);
+  height: 100%;
+  flex-direction: column;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+
+.cart-drawer.is-open .cart-panel {
+  transform: translateX(0);
+}
+
+.cart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #d9dee5;
+  padding: 1rem 1.15rem;
+}
+
+.cart-heading h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.panel-subtitle {
+  margin: 0.2rem 0 0;
+  color: #68727f;
+  font-size: 0.85rem;
+}
+
+.icon-button {
+  position: relative;
+  display: inline-grid;
+  width: 2.45rem;
+  height: 2.45rem;
+  place-items: center;
+  border: 0;
+  color: #141414;
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: #eef2f5;
+}
+
+.icon-button svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.notification-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 1rem 1.15rem 0;
+}
+
+.chip,
+.secondary-button {
+  min-height: 2.25rem;
+  border: 1px solid transparent;
+  padding: 0 0.85rem;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.chip {
+  color: #263442;
+  background: #edf1f5;
+}
+
+.chip:hover,
+.secondary-button:hover {
+  border-color: #aeb7c2;
+  background: #e6edf3;
+}
+
+.chip.is-active {
+  border-color: #111;
+  color: #fff;
+  background: #111;
+}
+
+.secondary-button {
+  color: #111;
+  background: #eef2f5;
+}
+
+.notification-list {
+  flex: 1;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+.notification-card {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 0.9rem;
+}
+
+.notification-card.is-unread {
+  border-color: #a8d6b7;
+  background: #f0faf3;
+}
+
+.notification-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.notification-card h3,
+.notification-card p {
+  margin: 0;
+}
+
+.notification-card p,
+.notification-card time {
+  color: #68727f;
+}
+
+.notification-card time {
+  font-size: 0.78rem;
+}
+
+.status-pill {
+  width: fit-content;
+  border-radius: 999px;
+  color: #111;
+  background: #edf1f5;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.status-pill.is-pending {
+  color: #94620f;
+  background: #fff3cf;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 2rem 0;
+  color: #68727f;
+}

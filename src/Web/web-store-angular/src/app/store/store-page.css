@@ -1,0 +1,44 @@
+:host {
+  --ink: #141414;
+  --muted: #68727f;
+  --page: #f4f6f8;
+  --shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  display: block;
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink);
+}
+
+.product-detail-shell {
+  width: min(96rem, 100%);
+  margin: 0 auto;
+  padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 4.5rem;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 2rem 0;
+  color: var(--muted);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  z-index: 40;
+  max-width: min(32rem, calc(100% - 2rem));
+  border-radius: 8px;
+  color: #fff;
+  background: #111;
+  padding: 0.85rem 1rem;
+  box-shadow: var(--shadow);
+  transform: translate(-50%, 1rem);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}

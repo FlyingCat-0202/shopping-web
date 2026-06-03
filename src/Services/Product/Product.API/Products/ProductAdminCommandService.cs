@@ -26,11 +26,7 @@ internal sealed class ProductAdminCommandService(
         if (categoryExists)
             return ProductOperationResult<CategoryResponse>.Conflict("Danh mục đã tồn tại.");
 
-        var category = new Category
-        {
-            Name = categoryName,
-            Description = NormalizeOptionalText(request.Description)
-        };
+        var category = Category.Create(categoryName, request.Description);
 
         db.Categories.Add(category);
         await db.SaveChangesAsync(cancellationToken);
@@ -128,6 +124,4 @@ internal sealed class ProductAdminCommandService(
             "Yêu cầu xóa/ẩn sản phẩm đã được đưa vào hàng đợi.");
     }
 
-    private static string? NormalizeOptionalText(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

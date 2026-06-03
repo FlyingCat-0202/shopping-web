@@ -1,0 +1,42 @@
+<header class="site-hero">
+  <nav class="topbar" aria-label="Primary navigation">
+    <a class="brand" href="#" aria-label="Sech-Team home">
+      <svg viewBox="0 0 96 72" role="img" aria-hidden="true">
+        <path d="M16 14h50l14 14-14 14H39L26 58H15l17-24h31l7-6-7-6H16Z" fill="currentColor" />
+        <path d="M28 58h48M34 64h35" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
+      </svg>
+      <span>Sech</span>
+      <small>Team</small>
+    </a>
+
+    <div class="nav-actions">
+      <button class="icon-button" type="button" aria-label="Notifications" (click)="openNotifications.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+          <path d="M10 21h4" />
+        </svg>
+        <span class="cart-count notification-count" [attr.data-visible]="unreadNotificationCount > 0 ? 'true' : 'false'">
+          {{ unreadNotificationCount }}
+        </span>
+      </button>
+      <button class="icon-button" type="button" aria-label="Account" (click)="openAccount.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 21a8 8 0 0 0-16 0" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      </button>
+      <button class="icon-button" type="button" aria-label="Open cart" (click)="openCart.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 7h12l-1 13H7L6 7Z" />
+          <path d="M9 7a3 3 0 0 1 6 0" />
+        </svg>
+        <span class="cart-count" [attr.data-visible]="cartCount > 0 ? 'true' : 'false'">{{ cartCount }}</span>
+      </button>
+    </div>
+  </nav>
+
+  <section class="hero-copy">
+    <h1>Sech-Team Store</h1>
+    <p>Curated products for everyday style and team energy.</p>
+  </section>
+</header>

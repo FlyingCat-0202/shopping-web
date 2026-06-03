@@ -1,0 +1,59 @@
+<aside
+  class="modal-layer"
+  aria-label="Order details"
+  [class.is-open]="order !== null"
+  (click)="close.emit()"
+>
+  <section class="modal-card order-detail-card" *ngIf="order as orderDetail" (click)="$event.stopPropagation()">
+    <div class="modal-heading">
+      <div>
+        <h2>Order #{{ shortId(orderDetail.id) }}</h2>
+        <p>{{ orderDetail.status }} / {{ orderDetail.paymentStatus }}</p>
+      </div>
+      <button class="icon-button" type="button" aria-label="Close order details" (click)="close.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="detail-summary">
+      <span>{{ formatDate(orderDetail.orderDate) }}</span>
+      <strong>{{ orderDetail.totalAmount | currency: 'USD' }}</strong>
+      <span>{{ orderDetail.paymentMethod }}</span>
+      <span *ngIf="orderDetail.customerId">Customer {{ shortId(orderDetail.customerId) }}</span>
+    </div>
+
+    <section class="detail-section">
+      <h3>Delivery</h3>
+      <p>{{ orderDetail.receiverName }} · {{ orderDetail.phoneNumber }}</p>
+      <p>{{ orderDetail.shippingAddress }}</p>
+    </section>
+
+    <section class="detail-section">
+      <h3>Items</h3>
+      <div class="detail-item" *ngFor="let item of orderDetail.items; trackBy: trackByOrderDetailItem">
+        <img [src]="item.productImageUrl || fallbackImage" [alt]="item.productName" />
+        <div>
+          <strong>{{ item.productName }}</strong>
+          <p>{{ shortId(item.productId) }} · Qty {{ item.quantity }}</p>
+        </div>
+        <span>{{ item.unitPrice * item.quantity | currency: 'USD' }}</span>
+      </div>
+    </section>
+
+    <section class="detail-section">
+      <h3>Timeline</h3>
+      <ol class="order-timeline">
+        <li *ngFor="let event of orderDetail.timeline; trackBy: trackByTimelineItem">
+          <span class="timeline-dot"></span>
+          <div>
+            <strong>{{ event.title }}</strong>
+            <p>{{ event.description }}</p>
+            <time>{{ formatDate(event.occurredAt) }} · {{ event.source }}</time>
+          </div>
+        </li>
+      </ol>
+    </section>
+  </section>
+</aside>

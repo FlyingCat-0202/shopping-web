@@ -1,0 +1,127 @@
+:host {
+  display: contents;
+}
+
+button,
+select,
+input,
+textarea {
+  border-radius: 6px;
+  font: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  pointer-events: none;
+  background: rgba(10, 13, 18, 0);
+  transition: background 0.22s ease;
+}
+
+.modal-layer.is-open {
+  pointer-events: auto;
+  background: rgba(10, 13, 18, 0.42);
+}
+
+.modal-card {
+  width: min(33rem, 100%);
+  max-height: min(44rem, 92vh);
+  overflow: auto;
+  border-radius: 8px;
+  background: #fff;
+  padding: 1.15rem;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  transform: translateY(1rem);
+  opacity: 0;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.modal-layer.is-open .modal-card {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.modal-heading h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.icon-button {
+  position: relative;
+  display: inline-grid;
+  width: 2.45rem;
+  height: 2.45rem;
+  place-items: center;
+  border: 0;
+  color: #141414;
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: #eef2f5;
+}
+
+.icon-button svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.stack-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stack-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: #68727f;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.stack-form input,
+.stack-form select,
+.stack-form textarea {
+  width: 100%;
+  border: 1px solid #d9dee5;
+  background: #fff;
+  color: #111;
+  padding: 0.72rem 0.78rem;
+}
+
+.primary-button {
+  min-height: 2.65rem;
+  border: 1px solid transparent;
+  color: #fff;
+  background: #111;
+  padding: 0 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.primary-button:hover {
+  background: #2a2a2a;
+}

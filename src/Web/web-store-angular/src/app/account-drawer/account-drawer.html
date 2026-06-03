@@ -1,0 +1,265 @@
+<aside *ngIf="isOpen" class="cart-drawer is-open" aria-label="Account" (click)="close.emit()">
+  <div class="cart-panel account-panel" (click)="$event.stopPropagation()">
+    <div class="cart-heading">
+      <h2>Account</h2>
+      <button class="icon-button" type="button" aria-label="Close account" (click)="close.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="account-body">
+      <section class="auth-section" *ngIf="!auth">
+        <div class="auth-tabs">
+          <button class="tab-button" [class.is-active]="authTab === 'login'" type="button" (click)="authTabChange.emit('login')">
+            Login
+          </button>
+          <button class="tab-button" [class.is-active]="authTab === 'register'" type="button" (click)="authTabChange.emit('register')">
+            Register
+          </button>
+        </div>
+
+        <form class="stack-form" *ngIf="authTab === 'login'" (ngSubmit)="login.emit()">
+          <label>
+            Email or phone
+            <input name="emailOrPhone" autocomplete="username" [(ngModel)]="loginModel.emailOrPhone" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" [(ngModel)]="loginModel.password" required />
+          </label>
+          <button class="primary-button" type="submit">Login</button>
+        </form>
+
+        <form class="stack-form" *ngIf="authTab === 'register'" (ngSubmit)="register.emit()">
+          <label>
+            Full name
+            <input name="fullName" autocomplete="name" [(ngModel)]="registerModel.fullName" required />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" [(ngModel)]="registerModel.email" required />
+          </label>
+          <label>
+            Phone number
+            <input name="phoneNumber" placeholder="0912345678" [(ngModel)]="registerModel.phoneNumber" required />
+          </label>
+          <label>
+            Password
+            <input name="registerPassword" type="password" autocomplete="new-password" [(ngModel)]="registerModel.password" required />
+          </label>
+          <button class="primary-button" type="submit">Create account</button>
+        </form>
+      </section>
+
+      <section class="auth-section" *ngIf="auth as user">
+        <div class="profile-card">
+          <span>{{ user.role }}</span>
+          <strong>{{ user.fullName || user.email }}</strong>
+          <p>{{ user.email }}</p>
+        </div>
+        <div class="inline-actions">
+          <button class="secondary-button" type="button" (click)="reloadOrders.emit()">Reload orders</button>
+          <button class="secondary-button" type="button" (click)="logout.emit()">Logout</button>
+        </div>
+        <div class="orders-list">
+          <p class="empty-state" *ngIf="orders.length === 0">No orders yet.</p>
+          <article class="order-card" *ngFor="let order of orders; trackBy: trackByOrder">
+            <header>
+              <h4>#{{ shortId(order.id) }}</h4>
+              <strong>{{ formatPrice(order.totalAmount) }}</strong>
+            </header>
+            <span class="status-pill">{{ order.status }} / {{ order.paymentStatus }}</span>
+            <p *ngIf="paymentFor(order) as payment">
+              Payment {{ payment.status }} via {{ payment.paymentMethod }}
+            </p>
+            <p>{{ formatDate(order.orderDate) }}</p>
+            <p *ngIf="order.customerId">Customer {{ shortId(order.customerId) }}</p>
+            <div class="inline-actions">
+              <button
+                class="secondary-button"
+                type="button"
+                [disabled]="isOrderDetailBusy(order)"
+                (click)="openOrderDetail.emit(order)"
+              >
+                {{ isOrderDetailBusy(order) ? 'Loading...' : 'Details' }}
+              </button>
+              <button
+                class="primary-button"
+                *ngIf="canConfirmPayment(order)"
+                type="button"
+                [disabled]="isConfirmingPayment(order)"
+                (click)="confirmPayment.emit(order)"
+              >
+                {{ isConfirmingPayment(order) ? 'Opening...' : payButtonText(order) }}
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="!isAdmin && order.canCancel"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'cancel')"
+                (click)="orderAction.emit({ order, action: 'cancel' })"
+              >
+                {{ isOrderActionBusy(order, 'cancel') ? 'Cancelling...' : 'Cancel' }}
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="!isAdmin && order.canReturn"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'returnRequest')"
+                (click)="orderAction.emit({ order, action: 'returnRequest' })"
+              >
+                Request return
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="isAdmin && order.status === 'Processing'"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'ship')"
+                (click)="orderAction.emit({ order, action: 'ship' })"
+              >
+                Ship
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="isAdmin && order.status === 'Shipped'"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'deliver')"
+                (click)="orderAction.emit({ order, action: 'deliver' })"
+              >
+                Deliver
+              </button>
+              <button
+                class="secondary-button"
+                *ngIf="isAdmin && order.status === 'ReturnRequested'"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'returnApprove')"
+                (click)="orderAction.emit({ order, action: 'returnApprove' })"
+              >
+                Approve return
+              </button>
+              <button
+                class="danger-button"
+                *ngIf="isAdmin && order.status === 'ReturnRequested'"
+                type="button"
+                [disabled]="isOrderActionBusy(order, 'returnReject')"
+                (click)="orderAction.emit({ order, action: 'returnReject' })"
+              >
+                Reject return
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="auth-section" *ngIf="isAdmin">
+        <h3>Admin tools</h3>
+        <section class="admin-payments">
+          <h4>Payments</h4>
+          <form class="stack-form compact-form" (ngSubmit)="reloadAdminPayments.emit()">
+            <label>
+              Status
+              <select name="paymentStatus" [(ngModel)]="paymentFilters.status">
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Succeeded">Succeeded</option>
+                <option value="Failed">Failed</option>
+                <option value="Expired">Expired</option>
+              </select>
+            </label>
+            <label>
+              Order ID
+              <input name="paymentOrderId" [(ngModel)]="paymentFilters.orderId" />
+            </label>
+            <label>
+              Customer ID
+              <input name="paymentCustomerId" [(ngModel)]="paymentFilters.customerId" />
+            </label>
+            <button class="secondary-button" type="submit" [disabled]="adminPaymentsLoading">
+              {{ adminPaymentsLoading ? 'Loading...' : 'Reload payments' }}
+            </button>
+          </form>
+
+          <div class="payments-list">
+            <p class="empty-state" *ngIf="adminPayments.length === 0">No payments found.</p>
+            <article class="payment-card" *ngFor="let payment of adminPayments; trackBy: trackByPayment">
+              <header>
+                <h5>#{{ shortId(payment.id) }}</h5>
+                <strong>{{ formatPrice(payment.amount) }}</strong>
+              </header>
+              <span class="status-pill" [ngClass]="paymentStatusClass(payment.status)">
+                {{ payment.status }} / {{ payment.paymentMethod }}
+              </span>
+              <p>Order {{ shortId(payment.orderId) }}</p>
+              <p *ngIf="payment.customerId">Customer {{ shortId(payment.customerId) }}</p>
+              <p *ngIf="payment.providerTransactionId">Provider {{ payment.providerTransactionId }}</p>
+              <p *ngIf="payment.failureReason">{{ payment.failureReason }}</p>
+              <p>{{ formatDate(payment.createdAt) }}</p>
+              <div class="inline-actions" *ngIf="canMockPayment(payment)">
+                <button
+                  class="primary-button"
+                  type="button"
+                  [disabled]="isMockingPayment(payment, true)"
+                  (click)="mockPayment.emit({ payment, success: true })"
+                >
+                  {{ isMockingPayment(payment, true) ? 'Sending...' : 'Mock success' }}
+                </button>
+                <button
+                  class="danger-button"
+                  type="button"
+                  [disabled]="isMockingPayment(payment, false)"
+                  (click)="mockPayment.emit({ payment, success: false })"
+                >
+                  {{ isMockingPayment(payment, false) ? 'Sending...' : 'Mock fail' }}
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <form class="stack-form" (ngSubmit)="createCategory.emit()">
+          <label>
+            Category name
+            <input name="categoryName" placeholder="Jackets" [(ngModel)]="categoryModel.name" required />
+          </label>
+          <label>
+            Description
+            <textarea name="categoryDescription" rows="2" [(ngModel)]="categoryModel.description"></textarea>
+          </label>
+          <button class="primary-button" type="submit">Create category</button>
+        </form>
+
+        <form class="stack-form product-admin-form" (ngSubmit)="createProduct.emit()">
+          <label>
+            Product name
+            <input name="productName" [(ngModel)]="productModel.name" required />
+          </label>
+          <label>
+            Price
+            <input name="price" type="number" min="0.01" step="0.01" [(ngModel)]="productModel.price" required />
+          </label>
+          <label>
+            Stock
+            <input name="stockQuantity" type="number" min="0" step="1" [(ngModel)]="productModel.stockQuantity" required />
+          </label>
+          <label>
+            Category
+            <select name="productCategoryId" [(ngModel)]="productModel.categoryId" required>
+              <option *ngFor="let category of categories; trackBy: trackByCategory" [ngValue]="category.id">{{ category.name }}</option>
+            </select>
+          </label>
+          <label>
+            Image URL
+            <input name="imageUrl" type="url" [(ngModel)]="productModel.imageUrl" />
+          </label>
+          <label>
+            Description
+            <textarea name="productDescription" rows="3" [(ngModel)]="productModel.description"></textarea>
+          </label>
+          <button class="primary-button" type="submit">Create product</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</aside>

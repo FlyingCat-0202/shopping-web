@@ -1,0 +1,58 @@
+<main class="product-detail-shell">
+  <button class="back-link" type="button" (click)="back.emit()">
+    Back to products
+  </button>
+
+  <section class="product-detail-layout" aria-label="Product detail">
+    <div class="product-detail-media">
+      <img [src]="product.imageUrl" [alt]="product.name" />
+      <span class="stock-badge" [class.is-empty]="product.stockQuantity <= 0">
+        {{ product.stockQuantity > 0 ? 'In stock' : 'Out of stock' }}
+      </span>
+    </div>
+
+    <article class="product-detail-info">
+      <p class="product-detail-category">{{ product.categoryName }}</p>
+      <h2>{{ product.name }}</h2>
+      <strong class="product-detail-price">{{ product.price | currency: 'USD' }}</strong>
+      <div class="product-detail-stats">
+        <span>{{ product.stockQuantity }} in stock</span>
+        <span>{{ cartQuantity(product.id) }} in cart</span>
+      </div>
+      <p class="product-detail-description">
+        {{ product.description || 'No description has been added for this product yet.' }}
+      </p>
+      <div class="product-detail-actions">
+        <button
+          class="primary-button"
+          type="button"
+          [disabled]="product.stockQuantity <= 0 || cartQuantity(product.id) >= product.stockQuantity"
+          (click)="add.emit(product)"
+        >
+          {{ addButtonText(product) }}
+        </button>
+        <button class="secondary-button" type="button" (click)="openCart.emit()">Open cart</button>
+        <button class="secondary-button" *ngIf="isAdmin" type="button" (click)="edit.emit(product)">Edit</button>
+      </div>
+    </article>
+  </section>
+
+  <section class="related-products" *ngIf="relatedProducts.length > 0" aria-label="Related products">
+    <header>
+      <h2>Related products</h2>
+      <button class="secondary-button" type="button" (click)="back.emit()">View catalog</button>
+    </header>
+    <div class="related-grid">
+      <button
+        class="related-card"
+        *ngFor="let related of relatedProducts; trackBy: trackByProduct"
+        type="button"
+        (click)="openProduct.emit(related)"
+      >
+        <img [src]="related.imageUrl" [alt]="related.name" />
+        <span>{{ related.name }}</span>
+        <strong>{{ related.price | currency: 'USD' }}</strong>
+      </button>
+    </div>
+  </section>
+</main>

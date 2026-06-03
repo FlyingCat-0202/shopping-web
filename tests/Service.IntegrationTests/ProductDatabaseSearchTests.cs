@@ -94,45 +94,36 @@ public sealed class ProductDatabaseSearchTests
 
     private static async Task SeedProducts(ProductDbContext db)
     {
-        var apparel = new Category { Name = "Apparel", Description = "Jackets and coats" };
-        var shoes = new Category { Name = "Shoes", Description = "Sneakers" };
+        var apparel = Category.Create("Apparel", "Jackets and coats");
+        var shoes = Category.Create("Shoes", "Sneakers");
         db.Categories.AddRange(apparel, shoes);
         await db.SaveChangesAsync();
 
         db.Products.AddRange(
-            new Product.Domain.Entities.Product
-            {
-                Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                Name = "100% Cotton Jacket",
-                Description = "Literal percent product",
-                Price = 49,
-                StockQuantity = 3,
-                CategoryId = apparel.Id,
-                Category = apparel,
-                IsActive = true
-            },
-            new Product.Domain.Entities.Product
-            {
-                Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-                Name = "Trail Jacket",
-                Description = "Water resistant shell",
-                Price = 89,
-                StockQuantity = 7,
-                CategoryId = apparel.Id,
-                Category = apparel,
-                IsActive = true
-            },
-            new Product.Domain.Entities.Product
-            {
-                Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                Name = "City Sneaker",
-                Description = "Daily shoe",
-                Price = 99,
-                StockQuantity = 5,
-                CategoryId = shoes.Id,
-                Category = shoes,
-                IsActive = true
-            });
+            Product.Domain.Entities.Product.Create(
+                "100% Cotton Jacket",
+                49,
+                3,
+                apparel.Id,
+                "Literal percent product",
+                imageUrl: null,
+                id: Guid.Parse("11111111-1111-1111-1111-111111111111")),
+            Product.Domain.Entities.Product.Create(
+                "Trail Jacket",
+                89,
+                7,
+                apparel.Id,
+                "Water resistant shell",
+                imageUrl: null,
+                id: Guid.Parse("22222222-2222-2222-2222-222222222222")),
+            Product.Domain.Entities.Product.Create(
+                "City Sneaker",
+                99,
+                5,
+                shoes.Id,
+                "Daily shoe",
+                imageUrl: null,
+                id: Guid.Parse("33333333-3333-3333-3333-333333333333")));
 
         await db.SaveChangesAsync();
     }

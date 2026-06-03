@@ -1,7 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
-import { App } from './app';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { of } from 'rxjs';
 import { ApiConfig, ApiService, AuthState } from './api.service';
+import { StorePage } from './store/store-page';
 
 class ApiServiceStub {
   private authState: AuthState | null = null;
@@ -73,18 +74,22 @@ class ApiServiceStub {
   }
 }
 
-describe('App', () => {
-  let fixture: ComponentFixture<App>;
+describe('StorePage', () => {
+  let fixture: ComponentFixture<StorePage>;
   let api: ApiServiceStub;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [App],
-      providers: [{ provide: ApiService, useClass: ApiServiceStub }],
+      imports: [StorePage],
+      providers: [
+        { provide: ApiService, useClass: ApiServiceStub },
+        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({})) } },
+        { provide: Router, useValue: { navigate: jasmine.createSpy('navigate') } },
+      ],
     }).compileComponents();
 
     api = TestBed.inject(ApiService) as unknown as ApiServiceStub;
-    fixture = TestBed.createComponent(App);
+    fixture = TestBed.createComponent(StorePage);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -112,13 +117,15 @@ describe('App', () => {
     component.cart.set([{ productId: 'product-1', quantity: 1 }]);
     fixture.detectChanges();
 
-    fixture.debugElement.query(By.css('button.checkout-button')).nativeElement.click();
+    expect(fixture.nativeElement.querySelector('aside[aria-label="Checkout"]')).toBeNull();
+
+    component.openCheckout();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(component.checkoutOpen()).toBeTrue();
-    expect(fixture.nativeElement.textContent).toContain('Checkout');
+    expect(fixture.nativeElement.querySelector('aside[aria-label="Checkout"]')).not.toBeNull();
   });
 
   it('ignores stale catalog responses that complete after a newer request', async () => {

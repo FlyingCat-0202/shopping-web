@@ -22,17 +22,14 @@ internal sealed class ProductMutationService(
         if (category is null)
             throw new InvalidOperationException($"Category {request.CategoryId} không tồn tại.");
 
-        var product = new ProductEntity
-        {
-            Id = Guid.NewGuid(),
-            Name = request.Name.Trim(),
-            Price = request.Price,
-            StockQuantity = request.StockQuantity,
-            Description = NormalizeOptionalText(request.Description),
-            ImageUrl = NormalizeOptionalText(request.ImageUrl),
-            CategoryId = category.Id,
-            IsActive = request.IsActive,
-        };
+        var product = ProductEntity.Create(
+            request.Name,
+            request.Price,
+            request.StockQuantity,
+            category.Id,
+            request.Description,
+            request.ImageUrl,
+            request.IsActive);
 
         db.Products.Add(product);
 
@@ -66,13 +63,14 @@ internal sealed class ProductMutationService(
         if (categoryName is null)
             throw new InvalidOperationException($"Category {request.CategoryId} không tồn tại.");
 
-        product.Name = request.Name.Trim();
-        product.Price = request.Price;
-        product.StockQuantity = request.StockQuantity;
-        product.IsActive = request.IsActive;
-        product.Description = NormalizeOptionalText(request.Description);
-        product.ImageUrl = NormalizeOptionalText(request.ImgUrl);
-        product.CategoryId = request.CategoryId;
+        product.Update(
+            request.Name,
+            request.Price,
+            request.StockQuantity,
+            request.CategoryId,
+            request.Description,
+            request.ImgUrl,
+            request.IsActive);
 
         await publishEndpoint.Publish(new ProductUpdatedEvent(
             Id: product.Id,
@@ -99,12 +97,9 @@ internal sealed class ProductMutationService(
         if (!product.IsActive)
             return;
 
-        product.IsActive = false;
+        product.Deactivate();
 
         await publishEndpoint.Publish(new ProductDeletedEvent(product.Id), cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
     }
-
-    private static string? NormalizeOptionalText(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

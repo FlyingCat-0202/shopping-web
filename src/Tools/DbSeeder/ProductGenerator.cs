@@ -174,16 +174,13 @@ public static class ProductGenerator
 
             string description = GenerateDescription(faker, name, subcat, material, fit, color, collection);
 
-            var product = new ProductEntity
-            {
-                Name = name,
-                Price = price,
-                StockQuantity = stock,
-                CategoryId = categoryId,
-                Description = description,
-                ImageUrl = imageUrl,
-                IsActive = true
-            };
+            var product = ProductEntity.Create(
+                name,
+                price,
+                stock,
+                categoryId,
+                description,
+                imageUrl);
 
             productsToAdd.Add(product);
             generatedCount++;
@@ -287,7 +284,7 @@ public static class ProductGenerator
 
         var toAdd = categoryDefinitions
             .Where(d => !existingNamesSet.Contains(d.Key))
-            .Select(d => new Category { Name = d.Key, Description = d.Value })
+            .Select(d => Category.Create(d.Key, d.Value))
             .ToList();
 
         if (toAdd.Count > 0)

@@ -1,0 +1,205 @@
+<main class="shop-shell">
+  <aside class="filters" aria-label="Product filters">
+    <div class="filters-title">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h16M7 12h10M10 17h4" />
+      </svg>
+      <span>Filters</span>
+    </div>
+
+    <section class="filter-section">
+      <h2>Category</h2>
+      <div class="chip-list">
+        <button
+          *ngFor="let chip of categoryChips; trackBy: trackByValue"
+          class="chip"
+          [class.is-active]="selectedCategory === chip.value"
+          type="button"
+          (click)="categoryChange.emit(chip.value)"
+        >
+          {{ chip.label }}
+        </button>
+      </div>
+    </section>
+
+    <section class="filter-section">
+      <h2>Availability</h2>
+      <div class="chip-list">
+        <button
+          *ngFor="let chip of stockChips; trackBy: trackByValue"
+          class="chip"
+          [class.is-active]="selectedStock === chip.value"
+          type="button"
+          (click)="stockChange.emit(chip.value)"
+        >
+          {{ chip.label }}
+        </button>
+      </div>
+    </section>
+  </aside>
+
+  <section class="products-region" aria-label="Products">
+    <div class="catalog-toolbar">
+      <div class="catalog-summary">
+        <p class="catalog-count">
+          <ng-container *ngIf="productTotal > 0; else noProducts">
+            <strong>{{ productRangeStart }}-{{ productRangeEnd }}</strong>
+            <span>of {{ productTotal }} {{ searchActive ? 'matches' : 'products' }}</span>
+          </ng-container>
+          <ng-template #noProducts>No products</ng-template>
+        </p>
+        <span
+          class="connection-state"
+          *ngIf="connectionState !== 'live'"
+          [class.is-offline]="connectionState === 'offline'"
+        >
+          {{ connectionState }}
+        </span>
+        <p *ngIf="searchActive">Searching for "{{ searchAppliedKeyword }}"</p>
+      </div>
+      <div class="catalog-actions">
+        <form class="search-form" (ngSubmit)="searchSubmit.emit()">
+          <label class="search-field">
+            <span>Search</span>
+            <input
+              name="searchKeyword"
+              type="search"
+              [ngModel]="searchKeyword"
+              (ngModelChange)="searchKeywordChange.emit($event)"
+              placeholder="Product, category, description"
+            />
+          </label>
+          <button class="secondary-button" type="submit" [disabled]="searchLoading">
+            {{ searchLoading ? 'Searching...' : 'Search' }}
+          </button>
+          <button class="secondary-button" *ngIf="searchActive" type="button" (click)="searchClear.emit()">Clear</button>
+        </form>
+        <div class="sort-menu" [class.is-open]="sortMenuOpen" (keydown.escape)="sortMenuClose.emit()">
+          <button
+            class="sort-trigger"
+            type="button"
+            aria-haspopup="listbox"
+            [attr.aria-expanded]="sortMenuOpen"
+            (click)="sortMenuToggle.emit()"
+          >
+            <span class="sort-kicker">Sort</span>
+            <span class="sort-value">{{ selectedSortLabel }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          <div class="sort-options" *ngIf="sortMenuOpen" role="listbox" aria-label="Sort products">
+            <button
+              class="sort-option"
+              *ngFor="let option of sortOptions; trackBy: trackByValue"
+              type="button"
+              role="option"
+              [class.is-selected]="selectedSort === option.value"
+              [attr.aria-selected]="selectedSort === option.value"
+              (click)="sortChange.emit(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="product-grid" *ngIf="products.length > 0; else emptyCatalog">
+      <article
+        class="product-card"
+        *ngFor="let product of products; trackBy: trackByProduct"
+        role="link"
+        tabindex="0"
+        [attr.aria-label]="'View ' + product.name"
+        (click)="productOpen.emit(product)"
+        (keydown)="onProductCardKeydown($event, product)"
+      >
+        <div class="product-media">
+          <img [src]="product.imageUrl" [alt]="product.name" loading="lazy" />
+          <span class="stock-badge" [class.is-empty]="product.stockQuantity <= 0">
+            {{ product.stockQuantity > 0 ? 'In stock' : 'Out of stock' }}
+          </span>
+          <button
+            class="add-button is-visible"
+            type="button"
+            [disabled]="product.stockQuantity <= 0 || (isAuthenticated && cartQuantity(product.id) >= product.stockQuantity)"
+            (click)="$event.stopPropagation(); productAdd.emit(product)"
+          >
+            {{ addButtonText(product) }}
+          </button>
+        </div>
+        <div class="product-info">
+          <div>
+            <h3>{{ product.name }}</h3>
+            <p class="product-meta">{{ product.categoryName }} / {{ product.stockQuantity }} in stock</p>
+          </div>
+          <strong>{{ product.price | currency: 'USD' }}</strong>
+          <p class="product-description" *ngIf="product.description">{{ product.description }}</p>
+          <div class="product-admin-actions" *ngIf="isAdmin">
+            <button class="secondary-button" type="button" (click)="$event.stopPropagation(); productEdit.emit(product)">Edit</button>
+            <button
+              class="danger-button"
+              type="button"
+              [disabled]="isDeletingProduct(product)"
+              (click)="$event.stopPropagation(); productDelete.emit(product)"
+            >
+              {{ isDeletingProduct(product) ? 'Deleting...' : 'Delete' }}
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <nav class="premium-pagination" *ngIf="productTotalPages > 1" aria-label="Product pagination">
+      <button
+        class="paginator-btn"
+        type="button"
+        aria-label="Previous page"
+        [disabled]="productPage <= 1 || searchLoading"
+        (click)="pageChange.emit(productPage - 1)"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+      </button>
+
+      <ng-container *ngFor="let item of paginationItems; trackBy: trackByPaginationItem">
+        <button
+          *ngIf="isPaginationPage(item); else paginationEllipsis"
+          class="paginator-btn"
+          type="button"
+          [class.is-active]="productPage === item"
+          [attr.aria-current]="productPage === item ? 'page' : null"
+          [attr.aria-label]="'Page ' + item"
+          [disabled]="searchLoading"
+          (click)="pageChange.emit(item)"
+        >
+          {{ item }}
+        </button>
+        <ng-template #paginationEllipsis>
+          <span class="paginator-ellipsis" aria-hidden="true">...</span>
+        </ng-template>
+      </ng-container>
+
+      <button
+        class="paginator-btn"
+        type="button"
+        aria-label="Next page"
+        [disabled]="productPage >= productTotalPages || searchLoading"
+        (click)="pageChange.emit(productPage + 1)"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </button>
+    </nav>
+
+    <ng-template #emptyCatalog>
+      <p class="empty-state" *ngIf="connectionState === 'offline'">
+        Product API is not reachable. Check AppHost, Product.API, and API endpoint settings.
+      </p>
+      <p class="empty-state" *ngIf="connectionState !== 'offline'">No products match the current filters.</p>
+    </ng-template>
+  </section>
+</main>

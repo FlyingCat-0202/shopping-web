@@ -46,8 +46,14 @@ public sealed class ProductStockReservationServiceTests
             CancellationToken.None);
         await db.SaveChangesAsync();
 
-        product.Name = "Renamed Later";
-        product.Price = 199;
+        product.Update(
+            "Renamed Later",
+            199,
+            product.StockQuantity,
+            product.CategoryId,
+            product.Description,
+            product.ImageUrl,
+            product.IsActive);
         await db.SaveChangesAsync();
 
         var duplicate = await service.ReserveStockAsync(
@@ -178,20 +184,18 @@ public sealed class ProductStockReservationServiceTests
         int stockQuantity,
         decimal price)
     {
-        var category = new Category { Name = $"Outerwear-{Guid.NewGuid():N}" };
-        var product = new Product.Domain.Entities.Product
-        {
-            Id = Guid.NewGuid(),
-            Name = "Trail Jacket",
-            Description = "Shell",
-            ImageUrl = "https://example.com/trail.jpg",
-            Price = price,
-            StockQuantity = stockQuantity,
-            Category = category,
-            IsActive = true
-        };
-
+        var category = Category.Create($"Outerwear-{Guid.NewGuid():N}");
         db.Categories.Add(category);
+        await db.SaveChangesAsync();
+
+        var product = Product.Domain.Entities.Product.Create(
+            "Trail Jacket",
+            price,
+            stockQuantity,
+            category.Id,
+            "Shell",
+            "https://example.com/trail.jpg");
+
         db.Products.Add(product);
         await db.SaveChangesAsync();
 

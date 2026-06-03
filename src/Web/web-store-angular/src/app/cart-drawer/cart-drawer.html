@@ -1,0 +1,55 @@
+<aside *ngIf="isOpen" class="cart-drawer is-open" aria-label="Shopping cart" (click)="close.emit()">
+  <div class="cart-panel" (click)="$event.stopPropagation()">
+    <div class="cart-heading">
+      <h2>Your pack</h2>
+      <button class="icon-button" type="button" aria-label="Close cart" (click)="close.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="cart-items">
+      <p class="empty-state" *ngIf="!isAuthenticated">Login to sync your cart with Redis.</p>
+      <p class="empty-state" *ngIf="isAuthenticated && cartLines.length === 0">Your pack is empty.</p>
+
+      <div class="cart-line" *ngFor="let line of cartLines; trackBy: trackByCartLine">
+        <img [src]="line.product.imageUrl" [alt]="line.product.name" />
+        <div>
+          <h3>{{ line.product.name }}</h3>
+          <p>{{ line.quantity }} x {{ line.product.price | currency: 'USD' }}</p>
+          <div class="quantity-controls">
+            <button
+              class="quantity-button"
+              type="button"
+              (click)="quantityChange.emit({ productId: line.productId, quantity: line.quantity - 1 })"
+            >
+              -
+            </button>
+            <span>{{ line.quantity }}</span>
+            <button
+              class="quantity-button"
+              type="button"
+              [disabled]="line.quantity >= line.product.stockQuantity"
+              (click)="quantityChange.emit({ productId: line.productId, quantity: line.quantity + 1 })"
+            >
+              +
+            </button>
+            <button class="remove-button" type="button" (click)="remove.emit(line.productId)">Remove</button>
+          </div>
+        </div>
+        <strong>{{ line.product.price * line.quantity | currency: 'USD' }}</strong>
+      </div>
+    </div>
+
+    <div class="cart-footer">
+      <div>
+        <span>Total</span>
+        <strong>{{ cartTotal | currency: 'USD' }}</strong>
+      </div>
+      <button type="button" class="checkout-button" [disabled]="!isAuthenticated || cartCount === 0" (click)="checkout.emit()">
+        Checkout
+      </button>
+    </div>
+  </div>
+</aside>

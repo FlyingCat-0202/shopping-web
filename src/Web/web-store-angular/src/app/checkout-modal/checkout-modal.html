@@ -1,0 +1,35 @@
+<aside *ngIf="isOpen" class="modal-layer is-open" aria-label="Checkout" (click)="close.emit()">
+  <form class="modal-card stack-form" (click)="$event.stopPropagation()" (ngSubmit)="submitCheckout.emit()">
+    <div class="modal-heading">
+      <h2>Checkout</h2>
+      <button class="icon-button" type="button" aria-label="Close checkout" (click)="close.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <label>
+      Receiver name
+      <input name="receiverName" autocomplete="name" [(ngModel)]="model.receiverName" required />
+    </label>
+    <label>
+      Phone number
+      <input name="phoneNumber" placeholder="0912345678" [(ngModel)]="model.phoneNumber" required />
+    </label>
+    <label>
+      Shipping address
+      <textarea name="shippingAddress" rows="3" [(ngModel)]="model.shippingAddress" required></textarea>
+    </label>
+    <label>
+      Payment method
+      <select name="paymentMethod" [(ngModel)]="model.paymentMethod">
+        <option *ngFor="let method of paymentMethods; trackBy: trackByValue" [value]="method.value">
+          {{ method.label }}
+        </option>
+      </select>
+    </label>
+    <button class="primary-button" type="submit" [disabled]="busy">
+      {{ busy ? 'Placing...' : 'Place order' }}
+    </button>
+  </form>
+</aside>

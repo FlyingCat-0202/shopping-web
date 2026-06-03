@@ -87,11 +87,20 @@ Production hardening notes and the release checklist are in:
 docs\production-readiness.md
 ```
 
-For a detailed map of the whole project, current architecture, service responsibilities, workflows, tests, and remaining gaps, read:
+## Documentation
+
+Read these files in order when learning the project:
 
 ```text
 docs\project-handbook.md
+docs\order-service-and-saga.md
+docs\product-service-and-search.md
+docs\testing-guide.md
+docs\learning-path.md
+docs\production-readiness.md
 ```
+
+`project-handbook.md` is the overview. The Order, Product/Search, and Testing docs are deep dives written for understanding the implementation, not just operating the app.
 
 All APIs expose:
 

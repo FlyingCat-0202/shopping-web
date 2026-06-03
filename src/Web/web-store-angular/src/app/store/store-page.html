@@ -1,0 +1,162 @@
+<app-store-header
+  [unreadNotificationCount]="unreadNotificationCount()"
+  [cartCount]="cartCount()"
+  (openNotifications)="openNotifications()"
+  (openAccount)="openAccount()"
+  (openCart)="openCart()"
+/>
+
+<app-product-detail
+  *ngIf="selectedProduct() as product"
+  [product]="product"
+  [relatedProducts]="relatedProducts()"
+  [cartQuantity]="cartQuantityForDetail"
+  [addButtonText]="addButtonTextForDetail"
+  [isAdmin]="isAdmin()"
+  (back)="closeProductDetail()"
+  (add)="addToCart($event)"
+  (openCart)="openCart()"
+  (edit)="startEditProduct($event)"
+  (openProduct)="openProductDetail($event)"
+/>
+
+<main class="product-detail-shell" *ngIf="productDetailLoading() && !selectedProduct()">
+  <p class="empty-state">Loading product detail...</p>
+</main>
+
+<app-catalog-view
+  *ngIf="!selectedProduct() && !productDetailLoading()"
+  [categoryChips]="categoryChips()"
+  [stockChips]="stockChips"
+  [sortOptions]="sortOptions"
+  [selectedCategory]="selectedCategory()"
+  [selectedStock]="selectedStock()"
+  [selectedSort]="selectedSort()"
+  [selectedSortLabel]="selectedSortLabel()"
+  [sortMenuOpen]="sortMenuOpen()"
+  [productTotal]="productTotal()"
+  [productRangeStart]="productRangeStart()"
+  [productRangeEnd]="productRangeEnd()"
+  [productPage]="productPage()"
+  [productTotalPages]="productTotalPages()"
+  [paginationItems]="paginationItems()"
+  [searchActive]="searchActive()"
+  [searchAppliedKeyword]="searchAppliedKeyword()"
+  [searchKeyword]="searchKeyword()"
+  [searchLoading]="searchLoading()"
+  [connectionState]="connectionState()"
+  [products]="visibleProducts()"
+  [isAuthenticated]="!!auth()"
+  [isAdmin]="isAdmin()"
+  [cartQuantity]="cartQuantityForDetail"
+  [addButtonText]="addButtonTextForDetail"
+  [isDeletingProduct]="isDeletingProductForCatalog"
+  (categoryChange)="setCategory($event)"
+  (stockChange)="setStock($event)"
+  (searchKeywordChange)="searchKeyword.set($event)"
+  (searchSubmit)="searchProducts()"
+  (searchClear)="clearSearch()"
+  (sortMenuToggle)="toggleSortMenu()"
+  (sortMenuClose)="closeSortMenu()"
+  (sortChange)="setSort($event)"
+  (productOpen)="openProductDetail($event)"
+  (productAdd)="addToCart($event)"
+  (productEdit)="startEditProduct($event)"
+  (productDelete)="deleteProduct($event)"
+  (pageChange)="goToProductPage($event)"
+/>
+
+<app-cart-drawer
+  [isOpen]="activeDrawer() === 'cart'"
+  [isAuthenticated]="!!auth()"
+  [cartLines]="cartLines()"
+  [cartCount]="cartCount()"
+  [cartTotal]="cartTotal()"
+  (close)="closeDrawer()"
+  (checkout)="openCheckout()"
+  (quantityChange)="updateCartItem($event.productId, $event.quantity)"
+  (remove)="removeCartItem($event)"
+/>
+
+<app-account-drawer
+  [isOpen]="activeDrawer() === 'account'"
+  [auth]="auth()"
+  [authTab]="authTab()"
+  [isAdmin]="isAdmin()"
+  [orders]="orders()"
+  [adminPayments]="adminPayments()"
+  [adminPaymentsLoading]="adminPaymentsLoading()"
+  [categories]="categories()"
+  [loginModel]="loginModel"
+  [registerModel]="registerModel"
+  [paymentFilters]="paymentFilters"
+  [categoryModel]="categoryModel"
+  [productModel]="productModel"
+  [shortId]="shortIdForModal"
+  [formatPrice]="formatPriceForDrawer"
+  [formatDate]="formatDateForDrawer"
+  [paymentFor]="paymentForDrawer"
+  [canConfirmPayment]="canConfirmPaymentForDrawer"
+  [isConfirmingPayment]="isConfirmingPaymentForDrawer"
+  [payButtonText]="payButtonTextForDrawer"
+  [isOrderActionBusy]="isOrderActionBusyForDrawer"
+  [isOrderDetailBusy]="isOrderDetailBusyForDrawer"
+  [isMockingPayment]="isMockingPaymentForDrawer"
+  [canMockPayment]="canMockPaymentForDrawer"
+  [paymentStatusClass]="paymentStatusClassForDrawer"
+  (close)="closeDrawer()"
+  (authTabChange)="authTab.set($event)"
+  (login)="login()"
+  (register)="register()"
+  (reloadOrders)="loadOrders()"
+  (logout)="logout()"
+  (openOrderDetail)="openOrderDetail($event)"
+  (confirmPayment)="confirmPayment($event)"
+  (orderAction)="orderAction($event.order, $event.action)"
+  (reloadAdminPayments)="loadAdminPayments()"
+  (mockPayment)="mockPayment($event.payment, $event.success)"
+  (createCategory)="createCategory()"
+  (createProduct)="createProduct()"
+/>
+
+<app-notifications-drawer
+  [isOpen]="activeDrawer() === 'notifications'"
+  [unreadCount]="unreadNotificationCount()"
+  [unreadOnly]="notificationUnreadOnly()"
+  [loading]="notificationsLoading()"
+  [markingAllRead]="isMarkingAllNotificationsRead()"
+  [notifications]="notifications()"
+  [isNotificationBusy]="isNotificationBusyForDrawer"
+  [formatDate]="formatDateForDrawer"
+  (close)="closeDrawer()"
+  (unreadOnlyChange)="setNotificationUnreadOnly($event)"
+  (markAllRead)="markAllNotificationsRead()"
+  (markRead)="markNotificationRead($event)"
+/>
+
+<app-checkout-modal
+  [isOpen]="checkoutOpen()"
+  [busy]="checkoutBusy()"
+  [model]="checkoutModel"
+  [paymentMethods]="paymentMethodOptions()"
+  (close)="closeCheckout()"
+  (submitCheckout)="checkout()"
+/>
+<app-order-detail-modal
+  [order]="selectedOrder()"
+  [fallbackImage]="fallbackImages[0]"
+  [shortId]="shortIdForModal"
+  [formatDate]="formatDateForDrawer"
+  (close)="closeOrderDetail()"
+/>
+
+<app-product-editor-modal
+  [isOpen]="productEditorOpen()"
+  [busy]="productSaveBusy()"
+  [model]="editProductModel"
+  [categories]="categories()"
+  (close)="closeProductEditor()"
+  (save)="updateProduct()"
+/>
+
+<div class="toast" [class.is-visible]="toast()" role="status" aria-live="polite">{{ toast() }}</div>
