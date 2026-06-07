@@ -10,7 +10,8 @@ public class OrderDbContextFactory : IDesignTimeDbContextFactory<OrderDbContext>
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__order-db")
             ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=order-db;Username=postgres;Password=postgres";
+            ?? throw new InvalidOperationException(
+                "Set ConnectionStrings__order-db before running Order EF migration commands.");
 
         var options = new DbContextOptionsBuilder<OrderDbContext>()
             .UseNpgsql(connectionString, npgsql =>

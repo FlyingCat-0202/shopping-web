@@ -10,7 +10,8 @@ public class NotificationDbContextFactory : IDesignTimeDbContextFactory<Notifica
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__notification-db")
             ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=notification-db;Username=postgres;Password=postgres";
+            ?? throw new InvalidOperationException(
+                "Set ConnectionStrings__notification-db before running Notification EF migration commands.");
 
         var options = new DbContextOptionsBuilder<NotificationDbContext>()
             .UseNpgsql(connectionString, npgsql =>

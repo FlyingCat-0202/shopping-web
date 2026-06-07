@@ -1,12 +1,14 @@
 using Elastic.Clients.Elasticsearch;
 using Elastic.Clients.Elasticsearch.Mapping;
 using Microsoft.EntityFrameworkCore;
-using Product.Domain.Entities;
+using Microsoft.Extensions.Options;
+using Product.API.Search;
+using Product.Domain.Search;
 using Product.Infrastructure.Data;
 
-namespace Product.API.IntegrationEvents.Consumers.Elastic;
+namespace Product.API.Search.Indexing;
 
-public static class ElasticConfigurator
+public static class ProductElasticIndexManager
 {
     public static async Task<bool> SetupIndexAsync(
         ElasticsearchClient elasticClient,
@@ -179,5 +181,48 @@ public static class ElasticConfigurator
             "Alias Elasticsearch {Alias} đang trỏ tới {Index}.",
             ElasticProductIndex.Name,
             ElasticProductIndex.VersionedName);
+    }
+}
+
+internal sealed class ProductElasticIndexWorker(
+    IServiceScopeFactory scopeFactory,
+    IOptions<ProductSearchOptions> options,
+    ILogger<ProductElasticIndexWorker> logger)
+    : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        if (!options.Value.ConfigureElasticIndexOnStartup)
+        {
+            logger.LogInformation("Skipping Elasticsearch startup index setup because ProductSearch configuration disabled it.");
+            return;
+        }
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var elasticClient = scope.ServiceProvider.GetRequiredService<ElasticsearchClient>();
+        var db = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
+        var aiEmbeddingService = scope.ServiceProvider.GetRequiredService<IAiEmbeddingService>();
+
+        try
+        {
+            var createdIndex = await ProductElasticIndexManager.SetupIndexAsync(elasticClient, logger, stoppingToken);
+            if (!createdIndex || !options.Value.RebuildElasticIndexWhenCreated)
+                return;
+
+            await ProductElasticIndexManager.RebuildIndexFromDatabaseAsync(
+                db,
+                elasticClient,
+                aiEmbeddingService,
+                logger,
+                stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            logger.LogInformation("Elasticsearch startup indexing was cancelled.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Elasticsearch startup indexing failed. Product catalog remains available; search can fall back to database.");
+        }
     }
 }

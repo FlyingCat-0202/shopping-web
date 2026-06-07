@@ -49,12 +49,3 @@ public record ProductUpdatedEvent(
     int CategoryId = 0,
     int StockQuantity = 0
 );
-
-public record SearchProductRequest(
-    string Keyword,
-    int Page = 1,
-    int PageSize = 10,
-    int? CategoryId = null,
-    string? Stock = null,
-    string? Sort = null
-);

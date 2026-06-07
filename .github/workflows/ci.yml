@@ -5,10 +5,28 @@ on:
     branches:
       - main
       - master
+    tags:
+      - "v*"
   pull_request:
   workflow_dispatch:
 
 jobs:
+  security-guardrails:
+    name: Security guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reject committed secrets and unsafe fallbacks
+        shell: bash
+        run: |
+          if git grep -n -E 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|amqp://guest:guest|M LA 1 CAI THANG NGU' -- . ':!.github/workflows/ci.yml'; then
+            echo "Committed secret material or an unsafe runtime fallback was found."
+            exit 1
+          fi
+
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -100,6 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs:
+      - security-guardrails
       - backend
       - frontend
       - package-audit
@@ -157,3 +176,93 @@ jobs:
           file: src/Web/web-store-angular/Dockerfile
           push: false
           tags: shopping-web/web-store-angular:ci
+
+  publish-images:
+    name: Publish release images
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - container-build
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api-gateway
+            project: src/Gateways/ApiGateway/ApiGateway.csproj
+            dll: ApiGateway.dll
+          - image: identity-api
+            project: src/Services/Identity/Identity.API/Identity.API.csproj
+            dll: Identity.API.dll
+          - image: product-api
+            project: src/Services/Product/Product.API/Product.API.csproj
+            dll: Product.API.dll
+          - image: cart-api
+            project: src/Services/Cart/Cart.API/Cart.API.csproj
+            dll: Cart.API.dll
+          - image: order-api
+            project: src/Services/Order/Order.API/Order.API.csproj
+            dll: Order.API.dll
+          - image: payment-api
+            project: src/Services/Payment/Payment.API/Payment.API.csproj
+            dll: Payment.API.dll
+          - image: notification-api
+            project: src/Services/Notification/Notification.API/Notification.API.csproj
+            dll: Notification.API.dll
+          - image: web-store-angular
+            frontend: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Publish .NET service image
+        if: ${{ matrix.frontend != true }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.dotnet-service
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            PROJECT=${{ matrix.project }}
+            APP_DLL=${{ matrix.dll }}
+
+      - name: Publish frontend image
+        if: ${{ matrix.frontend == true }}
+        uses: docker/build-push-action@v6
+        with:
+          context: src/Web/web-store-angular
+          file: src/Web/web-store-angular/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true

@@ -12,9 +12,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 ARG APP_DLL
 ENV APP_DLL=$APP_DLL
 ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+ENV DOTNET_EnableDiagnostics=0
 
 WORKDIR /app
 EXPOSE 8080
 COPY --from=build /app/publish .
 
+USER $APP_UID
 ENTRYPOINT ["sh", "-c", "dotnet $APP_DLL"]

@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Respawn;
 using Respawn.Graph;
+using System.Security.Cryptography;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 
@@ -16,6 +17,7 @@ namespace Identity.ApiTests;
 
 public sealed class IdentityApiFactory : WebApplicationFactory<Program>
 {
+    private static readonly (string PrivateKey, string PublicKey) JwtKeys = CreateJwtKeys();
     private readonly PostgreSqlContainer _postgres;
     private readonly RabbitMqContainer _rabbitMq;
     private Respawner? _respawner;
@@ -50,6 +52,8 @@ public sealed class IdentityApiFactory : WebApplicationFactory<Program>
 
         Environment.SetEnvironmentVariable("ConnectionStrings__identity-db", postgres.GetConnectionString());
         Environment.SetEnvironmentVariable("ConnectionStrings__rabbitmq", rabbitMq.GetConnectionString());
+        Environment.SetEnvironmentVariable("Jwt__PrivateKey", JwtKeys.PrivateKey);
+        Environment.SetEnvironmentVariable("Jwt__PublicKey", JwtKeys.PublicKey);
 
         var factory = new IdentityApiFactory(postgres, rabbitMq);
         await factory.InitializeDatabaseAsync();
@@ -75,7 +79,9 @@ public sealed class IdentityApiFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:identity-db"] = _postgres.GetConnectionString(),
-                ["ConnectionStrings:rabbitmq"] = _rabbitMq.GetConnectionString()
+                ["ConnectionStrings:rabbitmq"] = _rabbitMq.GetConnectionString(),
+                ["Jwt:PrivateKey"] = JwtKeys.PrivateKey,
+                ["Jwt:PublicKey"] = JwtKeys.PublicKey
             });
         });
 
@@ -130,6 +136,12 @@ public sealed class IdentityApiFactory : WebApplicationFactory<Program>
             .WithUsername("guest")
             .WithPassword("guest")
             .Build();
+
+    private static (string PrivateKey, string PublicKey) CreateJwtKeys()
+    {
+        using var rsa = RSA.Create(2048);
+        return (rsa.ExportPkcs8PrivateKeyPem(), rsa.ExportSubjectPublicKeyInfoPem());
+    }
 
     private async Task InitializeDatabaseAsync()
     {

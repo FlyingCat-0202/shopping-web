@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using System.Security.Cryptography;
+using System.Net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -27,6 +28,7 @@ public static class ServiceDefaultExtensions
 
     public static WebApplicationBuilder AddApiServiceDefaults(this WebApplicationBuilder builder)
     {
+        builder.ValidateProductionConfiguration();
         builder.ConfigureOpenTelemetry();
         builder.Services.AddProblemDetails();
         builder.Services.AddHealthChecks();
@@ -34,6 +36,36 @@ public static class ServiceDefaultExtensions
         builder.Services.AddFrontendCors(builder.Configuration, builder.Environment);
         builder.Services.AddApiRateLimiting(builder.Configuration);
         builder.Services.AddScalarOpenApi(builder.Environment.ApplicationName);
+
+        return builder;
+    }
+
+    private static WebApplicationBuilder ValidateProductionConfiguration(this WebApplicationBuilder builder)
+    {
+        if (!builder.Environment.IsProduction())
+            return builder;
+
+        var allowedHosts = builder.Configuration["AllowedHosts"];
+        if (string.IsNullOrWhiteSpace(allowedHosts) ||
+            allowedHosts.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Contains("*", StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "AllowedHosts must list explicit production host names and cannot contain '*'.");
+        }
+
+        var allowedOrigins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? [];
+        if (allowedOrigins.Length == 0 ||
+            allowedOrigins.Any(origin =>
+                !Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
+                string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+                (IPAddress.TryParse(uri.Host, out var address) && IPAddress.IsLoopback(address))))
+        {
+            throw new InvalidOperationException(
+                "Cors:AllowedOrigins must contain only explicit non-loopback production origins.");
+        }
 
         return builder;
     }
@@ -89,13 +121,12 @@ public static class ServiceDefaultExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var publicKey = configuration.GetRequiredConfigurationValue("Jwt:PublicKey");
+        var issuer = configuration.GetRequiredConfigurationValue("Jwt:Issuer");
+        var audience = configuration.GetRequiredConfigurationValue("Jwt:Audience");
+
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
         {
-            var jwtSection = configuration.GetSection("Jwt");
-            var publicKey = jwtSection["PublicKey"] ?? throw new InvalidOperationException("Jwt:PublicKey not configured");
-            var issuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer not configured");
-            var audience = jwtSection["Audience"] ?? throw new InvalidOperationException("Jwt:Audience not configured");
-
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -116,6 +147,33 @@ public static class ServiceDefaultExtensions
         var rsa = RSA.Create();
         rsa.ImportFromPem(pem);
         return new RsaSecurityKey(rsa);
+    }
+
+    public static Uri GetRequiredConnectionStringUri(
+        this IConfiguration configuration,
+        string name)
+    {
+        var connectionString = configuration.GetConnectionString(name);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"Connection string '{name}' is required and must be supplied by configuration or a secret store.");
+        }
+
+        return Uri.TryCreate(connectionString, UriKind.Absolute, out var uri)
+            ? uri
+            : throw new InvalidOperationException($"Connection string '{name}' must be a valid absolute URI.");
+    }
+
+    public static string GetRequiredConfigurationValue(
+        this IConfiguration configuration,
+        string key)
+    {
+        var value = configuration[key];
+        return !string.IsNullOrWhiteSpace(value)
+            ? value
+            : throw new InvalidOperationException(
+                $"Configuration value '{key}' is required and must be supplied by configuration or a secret store.");
     }
 
     public static WebApplication UseApiServiceDefaults(this WebApplication app)

@@ -1,10 +1,12 @@
-namespace Product.API.IntegrationEvents.Consumers.Elastic;
+namespace Product.API.Search.Indexing;
 
 public static class ElasticProductIndex
 {
-    public const int EmbeddingDimensions = 384;
+    // BAAI/bge-m3 produces 1024-dimensional dense vectors.
+    // Bump VersionedName whenever this value or another index mapping changes.
+    public const int EmbeddingDimensions = 1024;
     public const string Name = "products";
-    public const string VersionedName = "products-v385";
+    public const string VersionedName = "products-v386";
     public const string InStock = "in-stock";
     public const string OutOfStock = "out-of-stock";
 
@@ -40,3 +42,17 @@ public static class ElasticProductIndex
         return null;
     }
 }
+
+public sealed record ProductEsDocument(
+    Guid Id,
+    string Name,
+    decimal Price,
+    string CategoryName,
+    bool IsActive,
+    int CategoryId = 0,
+    int StockQuantity = 0,
+    string? StockStatus = null,
+    string? NameSort = null,
+    string? Description = null,
+    string? ImageUrl = null,
+    float[]? NameEmbeddingVector = null);

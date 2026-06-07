@@ -5,14 +5,14 @@ using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Product.API.Catalog;
 using Product.API.Endpoints;
-using Product.API.IntegrationEvents.Consumers.Elastic;
 using Product.API.IntegrationEvents.Consumers.OrderSupportConsumer;
 using Product.API.IntegrationEvents.Consumers.Self;
 using Product.API.Products;
 using Product.API.Search;
+using Product.API.Search.Indexing;
 using Product.API.Validators;
-using Product.Domain.Entities;
-using Product.Infrastructure.AISearch;
+using Product.Domain.Search;
+using Product.Infrastructure.Search;
 using Product.Infrastructure.Data;
 using ServiceDefault;
 
@@ -42,7 +42,7 @@ builder.Services.Configure<ProductSearchOptions>(
     builder.Configuration.GetSection(ProductSearchOptions.SectionName));
 builder.Services.Configure<ProductCatalogOptions>(
     builder.Configuration.GetSection(ProductCatalogOptions.SectionName));
-builder.Services.AddHostedService<ElasticIndexStartupService>();
+builder.Services.AddHostedService<ProductElasticIndexWorker>();
 builder.AddElasticsearchClient(
     "elasticsearch",
     configureClientSettings: settings => settings.DefaultIndex(ElasticProductIndex.Name));
@@ -70,7 +70,7 @@ builder.Services.AddMassTransit(x =>
 
     // Batch consumer: gộp tối đa 100 ProductCreatedEvent, chờ tối đa 2 giây.
     // MassTransit tự động nhóm message từ queue vào Batch<T> trước khi gọi Consume().
-    x.AddConsumer<SyncProductToElasticConsumer>(cfg =>
+    x.AddConsumer<ProductElasticSyncConsumer>(cfg =>
     {
         cfg.Options<BatchOptions>(o => o
             .SetMessageLimit(100)       // tối đa 100 message/batch
@@ -80,7 +80,7 @@ builder.Services.AddMassTransit(x =>
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.UseMessageRetry(r => r.Incremental(3, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
-        cfg.Host(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://guest:guest@localhost:5672/"));
+        cfg.Host(builder.Configuration.GetRequiredConnectionStringUri("rabbitmq"));
 
         cfg.ReceiveEndpoint("reserve-stock", e =>
         {
@@ -122,7 +122,7 @@ builder.Services.AddMassTransit(x =>
             // ────────────────────────────────────────────────────────────────────────
             e.PrefetchCount = 200;
             e.ConcurrentMessageLimit = 2;
-            e.ConfigureConsumer<SyncProductToElasticConsumer>(context);
+            e.ConfigureConsumer<ProductElasticSyncConsumer>(context);
         });
     });
 });

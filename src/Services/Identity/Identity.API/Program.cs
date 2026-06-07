@@ -38,6 +38,7 @@ builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>()
 
 // ── JWT Configuration ────────────────────────────────────────────────────────
 // Identity API chủ yếu phát hành token, nhưng vẫn cần auth để bảo vệ profile/user endpoints.
+builder.Configuration.GetRequiredConfigurationValue("Jwt:PrivateKey");
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
@@ -56,7 +57,7 @@ builder.Services.AddMassTransit(x =>
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.UseMessageRetry(r => r.Incremental(3, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
-        cfg.Host(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://guest:guest@localhost:5672/"));
+        cfg.Host(builder.Configuration.GetRequiredConnectionStringUri("rabbitmq"));
 
         cfg.ConfigureEndpoints(context);
     });

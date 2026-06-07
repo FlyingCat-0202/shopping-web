@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Payment.Infrastructure.Data;
+using System.Security.Cryptography;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 
@@ -14,6 +15,7 @@ namespace Payment.ApiTests;
 public sealed class PaymentApiFactory : WebApplicationFactory<Program>
 {
     public const string WebhookSecret = "payment-api-tests-secret";
+    private static readonly string JwtPublicKey = CreateJwtPublicKey();
 
     private readonly PostgreSqlContainer _postgres;
     private readonly RabbitMqContainer _rabbitMq;
@@ -56,6 +58,7 @@ public sealed class PaymentApiFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("ConnectionStrings__rabbitmq", rabbitMq.GetConnectionString());
         Environment.SetEnvironmentVariable("ConnectionStrings__redis", redisConnectionString);
         Environment.SetEnvironmentVariable("Payment__WebhookSecret", WebhookSecret);
+        Environment.SetEnvironmentVariable("Jwt__PublicKey", JwtPublicKey);
 
         var factory = new PaymentApiFactory(postgres, rabbitMq, redis);
         await factory.InitializeDatabaseAsync();
@@ -88,7 +91,8 @@ public sealed class PaymentApiFactory : WebApplicationFactory<Program>
                 ["ConnectionStrings:payment-db"] = _postgres.GetConnectionString(),
                 ["ConnectionStrings:rabbitmq"] = _rabbitMq.GetConnectionString(),
                 ["ConnectionStrings:redis"] = $"{_redis.Hostname}:{_redis.GetMappedPublicPort(6379)}",
-                ["Payment:WebhookSecret"] = WebhookSecret
+                ["Payment:WebhookSecret"] = WebhookSecret,
+                ["Jwt:PublicKey"] = JwtPublicKey
             });
         });
 
@@ -151,6 +155,12 @@ public sealed class PaymentApiFactory : WebApplicationFactory<Program>
             .WithPortBinding(6379, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
             .Build();
+
+    private static string CreateJwtPublicKey()
+    {
+        using var rsa = RSA.Create(2048);
+        return rsa.ExportSubjectPublicKeyInfoPem();
+    }
 
     private async Task InitializeDatabaseAsync()
     {

@@ -1,4 +1,3 @@
-using EventBus.Contracts;
 using Microsoft.Extensions.Options;
 
 namespace Product.API.Search;

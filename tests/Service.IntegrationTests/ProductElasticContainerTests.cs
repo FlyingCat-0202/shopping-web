@@ -1,7 +1,7 @@
 using DotNet.Testcontainers.Builders;
 using Elastic.Clients.Elasticsearch;
 using Microsoft.Extensions.Logging.Abstractions;
-using Product.API.IntegrationEvents.Consumers.Elastic;
+using Product.API.Search.Indexing;
 using Shouldly;
 using Xunit;
 
@@ -10,7 +10,7 @@ namespace Service.IntegrationTests;
 public class ProductElasticContainerTests
 {
     [SkippableFact]
-    public async Task ElasticConfiguratorCreatesVersionedIndexAliasAndQueryableFields()
+    public async Task ElasticIndexManagerCreatesVersionedIndexAliasAndQueryableFields()
     {
         Skip.IfNot(ServiceIntegrationTestEnvironment.IsDockerAvailable(), "Docker is required for Elasticsearch integration tests.");
 
@@ -31,8 +31,8 @@ public class ProductElasticContainerTests
 
         await WaitForElasticsearchAsync(client);
 
-        var created = await ElasticConfigurator.SetupIndexAsync(client, NullLogger.Instance);
-        var createdAgain = await ElasticConfigurator.SetupIndexAsync(client, NullLogger.Instance);
+        var created = await ProductElasticIndexManager.SetupIndexAsync(client, NullLogger.Instance);
+        var createdAgain = await ProductElasticIndexManager.SetupIndexAsync(client, NullLogger.Instance);
 
         created.ShouldBeTrue();
         createdAgain.ShouldBeFalse();

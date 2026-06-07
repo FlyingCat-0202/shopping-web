@@ -338,7 +338,7 @@ export class StorePage implements OnInit {
   );
 
 
-  loginModel = { emailOrPhone: 'admin@shopping.local', password: 'Admin123' };
+  loginModel = { emailOrPhone: '', password: '' };
   registerModel = { fullName: '', email: '', phoneNumber: '', password: '' };
   categoryModel = { name: '', description: '' };
   productModel = {

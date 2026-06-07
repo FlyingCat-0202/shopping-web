@@ -11,6 +11,23 @@ Microservice shopping system built with .NET, Angular, Aspire, PostgreSQL, Redis
 
 ## Run Locally
 
+Configure local infrastructure credentials once through AppHost user secrets:
+
+```powershell
+dotnet user-secrets --project AppHost set "Parameters:postgres-username" "shopping"
+dotnet user-secrets --project AppHost set "Parameters:postgres-password" "<local-postgres-password>"
+dotnet user-secrets --project AppHost set "Parameters:rabbitmq-username" "shopping"
+dotnet user-secrets --project AppHost set "Parameters:rabbitmq-password" "<local-rabbitmq-password>"
+```
+
+Optional development admin seed:
+
+```powershell
+dotnet user-secrets --project AppHost set "SeedAdmin:Email" "admin@shopping.local"
+dotnet user-secrets --project AppHost set "SeedAdmin:Password" "<local-admin-password>"
+dotnet user-secrets --project AppHost set "SeedAdmin:FullName" "System Admin"
+```
+
 Start the full Aspire stack:
 
 ```powershell
@@ -79,28 +96,7 @@ The pipeline runs:
 - .NET package audit
 - Docker image build checks for every API and the Angular frontend
 
-## Production Operations
-
-Production hardening notes and the release checklist are in:
-
-```text
-docs\production-readiness.md
-```
-
 ## Documentation
-
-Read these files in order when learning the project:
-
-```text
-docs\project-handbook.md
-docs\order-service-and-saga.md
-docs\product-service-and-search.md
-docs\testing-guide.md
-docs\learning-path.md
-docs\production-readiness.md
-```
-
-`project-handbook.md` is the overview. The Order, Product/Search, and Testing docs are deep dives written for understanding the implementation, not just operating the app.
 
 All APIs expose:
 
@@ -139,11 +135,3 @@ Monitor RabbitMQ consumer backlog:
 ```powershell
 k6 run perf\k6\rabbitmq-consumers.js -e RABBITMQ_MANAGEMENT_URL=http://localhost:15672 -e RABBITMQ_QUEUE=order-submitted
 ```
-
-## Remaining Hardening
-
-- Add seeded end-to-end tests against the real Aspire stack.
-- Add Docker image publish and deployment stages to CI.
-- Add coverage reporting and minimum coverage gates.
-- Add infrastructure-as-code manifests for real environments.
-- Add production runbooks for Elasticsearch reindex/rollback and database backup/restore.

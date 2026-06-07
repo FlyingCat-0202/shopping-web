@@ -19,10 +19,22 @@ public static class IdentitySeedData
         await EnsureRoleAsync(roleManager, CustomerRole);
 
         var adminSection = app.Configuration.GetSection("SeedAdmin");
-        var email = adminSection["Email"] ?? "admin@shopping.local";
-        var password = adminSection["Password"] ?? "Admin123";
+        var email = adminSection["Email"];
+        var password = adminSection["Password"];
         var fullName = adminSection["FullName"] ?? "System Admin";
-        var phoneNumber = adminSection["PhoneNumber"] ?? "0900000000";
+        var phoneNumber = adminSection["PhoneNumber"];
+
+        if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(password))
+        {
+            logger.LogInformation("Admin seed skipped because SeedAdmin credentials are not configured.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException(
+                "SeedAdmin:Email and SeedAdmin:Password must either both be configured or both be omitted.");
+        }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var admin = await userManager.FindByEmailAsync(normalizedEmail);

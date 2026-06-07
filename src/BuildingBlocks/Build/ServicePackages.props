@@ -3,43 +3,43 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="MassTransit" Version="8.3.3" />
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.3" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
-    <PackageReference Include="Aspire.StackExchange.Redis" Version="13.2.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
+    <PackageReference Include="Aspire.StackExchange.Redis" Version="13.4.2" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Order.API' Or '$(MSBuildProjectName)' == 'Product.API' Or '$(MSBuildProjectName)' == 'Identity.API' Or '$(MSBuildProjectName)' == 'Payment.API' Or '$(MSBuildProjectName)' == 'Notification.API'">
-    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.2.2" />
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.2" />
     <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.3.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Order.Infrastructure' Or '$(MSBuildProjectName)' == 'Product.Infrastructure' Or '$(MSBuildProjectName)' == 'Identity.Infrastructure' Or '$(MSBuildProjectName)' == 'Payment.Infrastructure' Or '$(MSBuildProjectName)' == 'Notification.Infrastructure'">
     <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.3.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Order.Infrastructure'">
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Identity.Infrastructure'">
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.8" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Identity.Domain'">
-    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="10.0.8" />
 	</ItemGroup>
 </Project>

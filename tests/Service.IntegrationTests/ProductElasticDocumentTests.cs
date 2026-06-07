@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using Product.API.IntegrationEvents.Consumers.Elastic;
+using Product.API.Search.Indexing;
 using Shouldly;
 using Xunit;
 
@@ -25,7 +25,8 @@ public class ProductElasticDocumentTests
             NameEmbeddingVector: new float[ElasticProductIndex.EmbeddingDimensions]);
 
         ElasticProductIndex.Name.ShouldBe("products");
-        ElasticProductIndex.VersionedName.ShouldStartWith("products-v");
+        ElasticProductIndex.VersionedName.ShouldBe("products-v386");
+        ElasticProductIndex.EmbeddingDimensions.ShouldBe(1024);
         document.CategoryId.ShouldBe(12);
         document.StockQuantity.ShouldBe(7);
         document.StockStatus.ShouldBe(ElasticProductIndex.InStock);

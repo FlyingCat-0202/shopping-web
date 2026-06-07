@@ -1,149 +1,172 @@
+using Identity.Domain.Models;
+using Identity.Infrastructure.Data;
+using MassTransit;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Identity;
 using Product.Infrastructure.Data;
-using Identity.Infrastructure.Data;
-using Identity.Domain.Models;
-using MassTransit;
 
 namespace DbSeeder;
 
-class Program
+internal static class Program
 {
-    static async Task<int> Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
-        Console.WriteLine("======================================");
-        Console.WriteLine("       Shopping Web Database Seeder   ");
-        Console.WriteLine("======================================");
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+                "Production",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("DbSeeder is a development/test tool and refuses to run in Production.");
+            return 2;
+        }
 
-        if (args.Length < 3 || !args[0].Equals("seed", StringComparison.OrdinalIgnoreCase))
+        if (!TryParseArguments(args, out var count, out var seedType))
         {
             PrintUsage();
             return 1;
         }
 
-        string type = args[2].ToLowerInvariant();
-        if (type != "product" && type != "products" && type != "customer" && type != "customers")
+        try
         {
-            PrintUsage();
+            return seedType == SeedType.Products
+                ? await SeedProductsAsync(count)
+                : await SeedCustomersAsync(count);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Seeding failed: {exception}");
             return 1;
         }
+    }
 
-        if (!int.TryParse(args[1], out int count) || count <= 0)
-        {
-            Console.WriteLine("Error: Count must be a valid positive integer.");
-            PrintUsage();
-            return 1;
-        }
+    private static async Task<int> SeedProductsAsync(int count)
+    {
+        var productDbConnection = GetRequiredEnvironmentVariable("ConnectionStrings__product-db");
+        var rabbitMqConnection = GetRequiredEnvironmentVariable("ConnectionStrings__rabbitmq");
 
-        var postgresUsername = Environment.GetEnvironmentVariable("Parameters__postgres-username") ?? "myuser";
-        var postgresPassword = Environment.GetEnvironmentVariable("Parameters__postgres-password") ?? "pnthuc1609";
-        var rabbitMqUsername = Environment.GetEnvironmentVariable("Parameters__rabbitmq-username") ?? "guest";
-        var rabbitMqPassword = Environment.GetEnvironmentVariable("Parameters__rabbitmq-password") ?? "guest";
-
-        var productDbConn = Environment.GetEnvironmentVariable("ConnectionStrings__product-db")
-                            ?? $"Host=localhost;Port=5432;Database=product-db;Username={postgresUsername};Password={postgresPassword}";
-
-        var identityDbConn = Environment.GetEnvironmentVariable("ConnectionStrings__identity-db")
-                             ?? $"Host=localhost;Port=5432;Database=identity-db;Username={postgresUsername};Password={postgresPassword}";
-
-        var rabbitMqConn = Environment.GetEnvironmentVariable("ConnectionStrings__rabbitmq")
-                           ?? $"amqp://{rabbitMqUsername}:{rabbitMqPassword}@localhost:5672/";
-
-        var services = new ServiceCollection();
-
-        services.AddLogging(configure => configure.AddConsole());
-
+        var services = CreateServiceCollection();
         services.AddDbContext<ProductDbContext>(options =>
-            options.UseNpgsql(productDbConn, npgsql =>
-            {
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Product", "product");
-            }));
+            options.UseNpgsql(productDbConnection, npgsql =>
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Product", "product")));
+        services.AddMassTransit(configurator =>
+            configurator.UsingRabbitMq((_, rabbit) => rabbit.Host(new Uri(rabbitMqConnection))));
 
-        services.AddDbContext<IdentityAppDbContext>(options =>
-            options.UseNpgsql(identityDbConn, npgsql =>
-            {
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Identity", "identity");
-            }));
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
+        await database.Database.MigrateAsync();
 
-        services.AddIdentity<Customer, IdentityRole<Guid>>(options =>
-        {
-            options.Password.RequireDigit = false;
-            options.Password.RequiredLength = 6;
-            options.Password.RequireNonAlphanumeric = false;
-            options.Password.RequireUppercase = false;
-        })
-        .AddEntityFrameworkStores<IdentityAppDbContext>()
-        .AddDefaultTokenProviders();
-
-        var serviceProvider = services.BuildServiceProvider();
-
+        var bus = scope.ServiceProvider.GetRequiredService<IBusControl>();
+        await bus.StartAsync();
         try
         {
-            Console.WriteLine("Checking database migrations...");
-            using var scope = serviceProvider.CreateScope();
-            var pDb = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
-            await pDb.Database.MigrateAsync();
-            var iDb = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
-            await iDb.Database.MigrateAsync();
-            Console.WriteLine("Databases are migrated.");
+            await ProductGenerator.GenerateProductsAsync(database, bus, count);
         }
-        catch (Exception ex)
+        finally
         {
-            Console.WriteLine($"Migration error: {ex.Message}");
-            return 1;
+            await bus.StopAsync();
         }
 
-        try
-        {
-            using var scope = serviceProvider.CreateScope();
-            if (type.StartsWith("product"))
-            {
-                var dbContext = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
-                
-                Console.WriteLine("Connecting to RabbitMQ event bus...");
-                var busControl = Bus.Factory.CreateUsingRabbitMq(cfg =>
-                {
-                    cfg.Host(new Uri(rabbitMqConn));
-                });
-                await busControl.StartAsync();
-
-                try
-                {
-                    await ProductGenerator.GenerateProductsAsync(dbContext, busControl, count);
-                }
-                finally
-                {
-                    await busControl.StopAsync();
-                }
-            }
-            else
-            {
-                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<Customer>>();
-                var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-
-                await CustomerGenerator.GenerateCustomersAsync(userManager, roleManager, count);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error during seeding process: {ex}");
-            return 1;
-        }
-
-        Console.WriteLine("Seeding process completed successfully.");
         return 0;
+    }
+
+    private static async Task<int> SeedCustomersAsync(int count)
+    {
+        var identityDbConnection = GetRequiredEnvironmentVariable("ConnectionStrings__identity-db");
+        var customerPassword = GetRequiredEnvironmentVariable("SeedCustomers__Password");
+
+        var services = CreateServiceCollection();
+        services.AddDbContext<IdentityAppDbContext>(options =>
+            options.UseNpgsql(identityDbConnection, npgsql =>
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Identity", "identity")));
+        services.AddIdentity<Customer, IdentityRole<Guid>>(options =>
+            {
+                options.Password.RequireDigit = false;
+                options.Password.RequiredLength = 6;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireUppercase = false;
+            })
+            .AddEntityFrameworkStores<IdentityAppDbContext>()
+            .AddDefaultTokenProviders();
+
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
+        await database.Database.MigrateAsync();
+
+        await CustomerGenerator.GenerateCustomersAsync(
+            scope.ServiceProvider.GetRequiredService<UserManager<Customer>>(),
+            scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>(),
+            count,
+            customerPassword);
+
+        return 0;
+    }
+
+    private static ServiceCollection CreateServiceCollection()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging(logging => logging.AddConsole());
+        return services;
+    }
+
+    private static string GetRequiredEnvironmentVariable(string name)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return !string.IsNullOrWhiteSpace(value)
+            ? value
+            : throw new InvalidOperationException($"Required environment variable '{name}' is missing.");
+    }
+
+    private static bool TryParseArguments(string[] args, out int count, out SeedType seedType)
+    {
+        count = 0;
+        seedType = default;
+
+        if (args.Length != 3 ||
+            !args[0].Equals("seed", StringComparison.OrdinalIgnoreCase) ||
+            !int.TryParse(args[1], out count) ||
+            count <= 0)
+        {
+            return false;
+        }
+
+        seedType = args[2].ToLowerInvariant() switch
+        {
+            "product" or "products" => SeedType.Products,
+            "customer" or "customers" => SeedType.Customers,
+            _ => default
+        };
+
+        return seedType != default;
     }
 
     private static void PrintUsage()
     {
-        Console.WriteLine("\nUsage:");
-        Console.WriteLine("  dotnet run --project src/Tools/DbSeeder -- seed [count] product");
-        Console.WriteLine("  dotnet run --project src/Tools/DbSeeder -- seed [count] customer");
-        Console.WriteLine("\nExample:");
-        Console.WriteLine("  dotnet run --project src/Tools/DbSeeder -- seed 500 product");
-        Console.WriteLine("  dotnet run --project src/Tools/DbSeeder -- seed 100 customer");
-        Console.WriteLine("======================================\n");
+        Console.WriteLine(
+            """
+            Development/test database seeder
+
+            Product seed requires:
+              ConnectionStrings__product-db
+              ConnectionStrings__rabbitmq
+
+            Customer seed requires:
+              ConnectionStrings__identity-db
+              SeedCustomers__Password
+
+            Usage:
+              dotnet run --project src/Tools/DbSeeder -- seed 500 product
+              dotnet run --project src/Tools/DbSeeder -- seed 100 customer
+            """);
+    }
+
+    private enum SeedType
+    {
+        None,
+        Products,
+        Customers
     }
 }

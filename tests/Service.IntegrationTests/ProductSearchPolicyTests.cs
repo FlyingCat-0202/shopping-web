@@ -76,7 +76,7 @@ public sealed class ProductSearchPolicyTests
         var database = new FakeDatabaseSearch();
         var service = CreateService(elastic, database);
 
-        var result = await service.SearchAsync(new SearchProductRequest(""));
+        var result = await service.SearchAsync(new SearchProductRequest());
 
         result.IsSuccess.ShouldBeTrue();
         elastic.Calls.ShouldBe(0);

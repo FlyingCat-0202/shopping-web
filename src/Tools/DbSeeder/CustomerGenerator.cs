@@ -21,7 +21,8 @@ public static class CustomerGenerator
     public static async Task GenerateCustomersAsync(
         UserManager<Customer> userManager,
         RoleManager<IdentityRole<Guid>> roleManager,
-        int totalToSeed)
+        int totalToSeed,
+        string password)
     {
         Console.WriteLine($"Starting seed of {totalToSeed} customers...");
 
@@ -92,7 +93,7 @@ public static class CustomerGenerator
                 Address = address
             };
 
-            var result = await userManager.CreateAsync(customer, "Customer123");
+            var result = await userManager.CreateAsync(customer, password);
             if (result.Succeeded)
             {
                 await userManager.AddToRoleAsync(customer, customerRole);

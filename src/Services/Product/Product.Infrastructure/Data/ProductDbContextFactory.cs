@@ -10,7 +10,8 @@ public class ProductDbContextFactory : IDesignTimeDbContextFactory<ProductDbCont
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__product-db")
             ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=product-db;Username=postgres;Password=0211";
+            ?? throw new InvalidOperationException(
+                "Set ConnectionStrings__product-db before running Product EF migration commands.");
 
         var options = new DbContextOptionsBuilder<ProductDbContext>()
             .UseNpgsql(connectionString, npgsql =>

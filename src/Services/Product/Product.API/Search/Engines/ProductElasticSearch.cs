@@ -3,8 +3,8 @@ using Elastic.Clients.Elasticsearch.QueryDsl;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Product.API.Dtos;
-using Product.API.IntegrationEvents.Consumers.Elastic;
-using Product.Domain.Entities;
+using Product.API.Search.Indexing;
+using Product.Domain.Search;
 using Product.Infrastructure.Data;
 
 namespace Product.API.Search;

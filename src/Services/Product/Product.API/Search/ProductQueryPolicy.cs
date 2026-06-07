@@ -2,7 +2,7 @@ using System.Linq.Expressions;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Product.API.Dtos;
-using Product.API.IntegrationEvents.Consumers.Elastic;
+using Product.API.Search.Indexing;
 using ProductEntity = Product.Domain.Entities.Product;
 
 namespace Product.API.Search;

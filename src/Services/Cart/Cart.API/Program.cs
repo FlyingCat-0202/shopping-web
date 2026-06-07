@@ -25,7 +25,7 @@ builder.Services.AddMassTransit(x =>
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.UseMessageRetry(r => r.Incremental(3, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)));
-        cfg.Host(new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? "amqp://guest:guest@localhost:5672/"));
+        cfg.Host(builder.Configuration.GetRequiredConnectionStringUri("rabbitmq"));
 
         cfg.ReceiveEndpoint("remove-cart-items", e =>
         {

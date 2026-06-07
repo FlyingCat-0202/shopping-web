@@ -1,9 +1,9 @@
 using Elastic.Clients.Elasticsearch;
 using EventBus.Contracts;
 using MassTransit;
-using Product.Domain.Entities;
+using Product.Domain.Search;
 
-namespace Product.API.IntegrationEvents.Consumers.Elastic;
+namespace Product.API.Search.Indexing;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Batch Consumer — nhận tối đa N message 1 lần thay vì từng message riêng lẻ.
@@ -17,9 +17,9 @@ namespace Product.API.IntegrationEvents.Consumers.Elastic;
 //   hỗ trợ input: string[]) → bulk index 100 doc vào ES 1 lần.
 //   Kết quả: từ N round-trip xuống còn 2 round-trip bất kể batch size.
 // ════════════════════════════════════════════════════════════════════════════
-public class SyncProductToElasticConsumer(
+public class ProductElasticSyncConsumer(
     ElasticsearchClient e,
-    ILogger<SyncProductToElasticConsumer> logger,
+    ILogger<ProductElasticSyncConsumer> logger,
     IAiEmbeddingService aiEmbeddingService)
     : IConsumer<Batch<ProductCreatedEvent>>,
       IConsumer<ProductDeletedEvent>,
